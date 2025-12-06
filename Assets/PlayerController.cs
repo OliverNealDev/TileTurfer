@@ -30,11 +30,16 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private Tilemap turfTilemap;
     // We don't need turfColor here anymore, the Manager handles the colors!
     private Vector3Int lastCell = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
+    
+    private AudioSource audioSource;
+    [SerializeField] private AudioClip shootSound;
 
     void Awake()
     { 
         rb = GetComponent<Rigidbody2D>();
         currentFireDelay = slowFireRate;
+        
+        audioSource = GetComponent<AudioSource>();
     }
 
     void FixedUpdate()
@@ -92,7 +97,26 @@ public class PlayerController : MonoBehaviour
                 transform.position + transform.right * 0.5f,
                 transform.rotation
             );
-            
+        
+            if (audioSource != null && shootSound != null)
+            {
+                // 1. Calculate how "fast" we are firing (0.0 is slow, 1.0 is max speed)
+                // We use slowFireRate (e.g. 0.5) and fastFireRate (e.g. 0.1) from your variables
+                float fireIntensity = Mathf.InverseLerp(slowFireRate, fastFireRate, currentFireDelay);
+
+                // 2. Set the base pitch: 
+                // Low fire rate = 0.9 pitch (slightly deep)
+                // Max fire rate = 1.4 pitch (higher, more energetic)
+                float basePitch = Mathf.Lerp(0.8f, 1.4f, fireIntensity);
+
+                // 3. Add random variance (-0.1 to +0.1) so no two shots sound identical
+                float randomVariance = Random.Range(-0.1f, 0.1f);
+
+                // 4. Apply and Play
+                audioSource.pitch = basePitch + randomVariance;
+                audioSource.PlayOneShot(shootSound);
+            }
+        
             projectile.GetComponent<bulletController>().Initialise(
                 true,
                 projectileSpeed,
@@ -100,7 +124,7 @@ public class PlayerController : MonoBehaviour
                 1f,
                 0f
             );
-             
+         
             timeSinceShot = 0f;
         }
     }

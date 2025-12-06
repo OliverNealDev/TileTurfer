@@ -4,6 +4,7 @@ using UnityEngine.AI;
 using UnityEngine.Serialization;
 using UnityEngine.Tilemaps;
 
+[RequireComponent(typeof(AudioSource))] 
 public class EnemyController : MonoBehaviour
 { 
     private NavMeshAgent agent;
@@ -17,12 +18,26 @@ public class EnemyController : MonoBehaviour
     private bool isDisabled = false;
     private Vector3Int lastCell = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
     
+    [Header("Audio")]
+    [SerializeField] private AudioClip hitSound;
+    [SerializeField] private AudioClip deathSound;
+    [Range(0f, 1f)] [SerializeField] private float sfxVolume = 1f;
+    private AudioSource audioSource;
+
+    [Header("Combat (Bombs)")]
+    [SerializeField] private GameObject bombPrefab; // Assign your Bomb Prefab here
+    [SerializeField] private float minBombInterval = 10f;
+    [SerializeField] private float maxBombInterval = 120f;
+    private float bombTimer;
+    private float currentBombInterval;
+
     private Vector2 randomNearbyPoint;
     private bool isChasing;
     
     void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
+        audioSource = GetComponent<AudioSource>(); 
 
         agent.updateRotation = false;
         agent.updateUpAxis = false;
@@ -30,7 +45,6 @@ public class EnemyController : MonoBehaviour
         var pos = transform.position;
         transform.position = new Vector3(pos.x, pos.y, 0f);
         
-        // It is often safer to assign these in Inspector, but Find is okay for simple scenes
         if (playerObj == null) playerObj = GameObject.Find("Player");
         if (turfManager == null) turfManager = FindAnyObjectByType<TurfManager>();
         if (turfTilemap == null) turfTilemap = GameObject.Find("TurfTilemap")?.GetComponent<Tilemap>();
@@ -47,6 +61,9 @@ public class EnemyController : MonoBehaviour
         
         Vector2 randomDirection = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(2f, 5f);
         randomNearbyPoint = (Vector2)transform.position + randomDirection;
+
+        // Initialize the first bomb timer
+        currentBombInterval = UnityEngine.Random.Range(minBombInterval, maxBombInterval);
     }
 
     void FixedUpdate()
@@ -67,13 +84,12 @@ public class EnemyController : MonoBehaviour
                 GetComponent<SpriteRenderer>().color = disabledColor;
             }
             
-            // Stop moving while growing
             if (agent.hasPath) agent.ResetPath(); 
 
             transform.localScale += Vector3.one * Time.deltaTime * 0.1f;
             if (transform.localScale.x >= 1f) transform.localScale = Vector3.one;
             
-            return; // Exit Update so we don't run movement logic while growing
+            return; 
         }
 
         // --- Active Phase ---
@@ -82,6 +98,9 @@ public class EnemyController : MonoBehaviour
             isDisabled = false;
             GetComponent<SpriteRenderer>().color = enemyColor;
         }
+
+        // Handle Bomb Spawning (Only when active)
+        HandleBombSpawning();
             
         float distanceToPlayer = Vector2.Distance(transform.position, playerObj.transform.position);
 
@@ -93,7 +112,6 @@ public class EnemyController : MonoBehaviour
         // 2. Roam Randomly
         else
         {
-            // Check if we reached the destination OR if we have no path
             if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
             {
                 SetNewRandomDestination();
@@ -101,15 +119,34 @@ public class EnemyController : MonoBehaviour
         }
     }
 
-    // Helper method to find a VALID point on the NavMesh
+    void HandleBombSpawning()
+    {
+        if (bombPrefab == null) return;
+
+        bombTimer += Time.deltaTime;
+
+        if (bombTimer >= currentBombInterval)
+        {
+            SpawnBomb();
+            
+            // Reset timer and pick a NEW random interval for the next drop
+            bombTimer = 0f;
+            currentBombInterval = UnityEngine.Random.Range(minBombInterval, maxBombInterval);
+        }
+    }
+
+    void SpawnBomb()
+    {
+        // Instantiate the bomb at the enemy's current position
+        Instantiate(bombPrefab, transform.position, Quaternion.identity);
+    }
+
     void SetNewRandomDestination()
     {
         Vector2 randomDir = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(2f, 5f);
         Vector3 targetPos = transform.position + new Vector3(randomDir.x, randomDir.y, 0);
 
         NavMeshHit hit;
-        // SamplePosition checks if the point is actually walkable. 
-        // If the random point is in a wall, this finds the closest floor point.
         if (NavMesh.SamplePosition(targetPos, out hit, 2.0f, NavMesh.AllAreas))
         {
             agent.SetDestination(hit.position);
@@ -124,8 +161,6 @@ public class EnemyController : MonoBehaviour
         
         if (cellPos == lastCell) return;
 
-        // Delegate all logic to the Manager (Painting + Scoring)
-        // Pass 'false' because this is an Enemy
         turfManager.RegisterTile(cellPos, false);
 
         lastCell = cellPos;
@@ -137,10 +172,21 @@ public class EnemyController : MonoBehaviour
         {
             Destroy(other.gameObject);
             
+            if (audioSource != null && hitSound != null)
+            {
+                audioSource.pitch = UnityEngine.Random.Range(0.9f, 1.1f);
+                audioSource.PlayOneShot(hitSound, sfxVolume);
+            }
+
             transform.localScale -= Vector3.one * 0.2f;
 
             if (transform.localScale.x <= 0.25f)
             {
+                if (deathSound != null)
+                {
+                    AudioSource.PlayClipAtPoint(deathSound, transform.position, sfxVolume);
+                }
+                
                 Destroy(gameObject);
             }
         }

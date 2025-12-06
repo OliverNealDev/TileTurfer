@@ -7,6 +7,7 @@ TagManager:
   - PlayerBullet
   - EnemyBullet
   - Enemy
+  - Minimap
   layers:
   - Default
   - TransparentFX
@@ -19,7 +20,7 @@ TagManager:
   - LightLayer
   - 
   - 
-  - 
+  - Minimap
   - 
   - 
   - 
@@ -46,6 +47,9 @@ TagManager:
     locked: 0
   - name: LightLayer
     uniqueID: 3639077513
+    locked: 0
+  - name: Minimap
+    uniqueID: 3014440143
     locked: 0
   m_RenderingLayers:
   - Default

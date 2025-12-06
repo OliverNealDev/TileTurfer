@@ -47,7 +47,7 @@ public class bulletController : MonoBehaviour
 
     IEnumerator DespawnSequence()
     {
-        yield return new WaitForSeconds(2f);
+        yield return new WaitForSeconds(1.5f);
 
         float duration = 0.25f;
         float elapsed = 0f;

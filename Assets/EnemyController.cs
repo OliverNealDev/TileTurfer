@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Serialization;
@@ -18,21 +19,37 @@ public class EnemyController : MonoBehaviour
     private bool isDisabled = false;
     private Vector3Int lastCell = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
     
+    [Header("Variation Settings")]
+    [SerializeField] private float minSizeMult = 0.85f;
+    [SerializeField] private float maxSizeMult = 1.15f;
+    [SerializeField] private float baseSpeed = 3.5f;
+    [SerializeField] private float colorVariance = 0.1f;
+    
+    private Vector3 targetScale;
+    private Color specificEnemyColor;
+    
     [Header("Audio")]
     [SerializeField] private AudioClip hitSound;
     [SerializeField] private AudioClip deathSound;
+    [SerializeField] private AudioClip shootSound;
     [Range(0f, 1f)] [SerializeField] private float sfxVolume = 1f;
     private AudioSource audioSource;
 
-    [Header("Combat (Bombs)")]
-    [SerializeField] private GameObject bombPrefab; // Assign your Bomb Prefab here
+    [Header("Combat")]
+    [SerializeField] private GameObject bombPrefab; 
     [SerializeField] private float minBombInterval = 10f;
     [SerializeField] private float maxBombInterval = 120f;
     private float bombTimer;
     private float currentBombInterval;
 
+    [Header("Enemy Shooting")]
+    [SerializeField] private GameObject projectilePrefab;
+    [SerializeField] private float fireRate = 4f; 
+    [SerializeField] private float bulletSpeed = 6f;
+    private float fireInterval;
+    private float fireTimer;
+
     private Vector2 randomNearbyPoint;
-    private bool isChasing;
     
     void Awake()
     {
@@ -50,19 +67,32 @@ public class EnemyController : MonoBehaviour
         if (turfTilemap == null) turfTilemap = GameObject.Find("TurfTilemap")?.GetComponent<Tilemap>();
         
         transform.localScale = new Vector3(0.01f, 0.01f, 0.01f); 
+        fireInterval = 1f / fireRate;
     }
 
     void Start()
     {
-        if (!agent.isOnNavMesh)
-        {
-            Debug.LogError("Enemy is NOT on NavMesh at Start. Check Z position and NavMesh baking.");
-        }
-        
+        if (!agent.isOnNavMesh) Debug.LogError("Enemy is NOT on NavMesh.");
+
+        // Variation Logic
+        float sizeMultiplier = UnityEngine.Random.Range(minSizeMult, maxSizeMult);
+        targetScale = new Vector3(sizeMultiplier, sizeMultiplier, 1f);
+        agent.speed = baseSpeed / sizeMultiplier;
+
+        float rOffset = UnityEngine.Random.Range(-colorVariance, colorVariance);
+        float gOffset = UnityEngine.Random.Range(-colorVariance, colorVariance);
+        float bOffset = UnityEngine.Random.Range(-colorVariance, colorVariance);
+
+        specificEnemyColor = new Color(
+            Mathf.Clamp01(enemyColor.r + rOffset),
+            Mathf.Clamp01(enemyColor.g + gOffset),
+            Mathf.Clamp01(enemyColor.b + bOffset),
+            enemyColor.a
+        );
+
         Vector2 randomDirection = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(2f, 5f);
         randomNearbyPoint = (Vector2)transform.position + randomDirection;
 
-        // Initialize the first bomb timer
         currentBombInterval = UnityEngine.Random.Range(minBombInterval, maxBombInterval);
     }
 
@@ -76,19 +106,16 @@ public class EnemyController : MonoBehaviour
         if (agent == null || playerObj == null) return;
         
         // --- Growing Phase ---
-        if (transform.localScale.x < 1f)
+        if (transform.localScale.x < targetScale.x)
         {
             if (!isDisabled)
             {
                 isDisabled = true;
                 GetComponent<SpriteRenderer>().color = disabledColor;
             }
-            
             if (agent.hasPath) agent.ResetPath(); 
-
-            transform.localScale += Vector3.one * Time.deltaTime * 0.1f;
-            if (transform.localScale.x >= 1f) transform.localScale = Vector3.one;
-            
+            transform.localScale += Vector3.one * Time.deltaTime * 0.25f; 
+            if (transform.localScale.x >= targetScale.x) transform.localScale = targetScale;
             return; 
         }
 
@@ -96,20 +123,18 @@ public class EnemyController : MonoBehaviour
         if (isDisabled)
         {
             isDisabled = false;
-            GetComponent<SpriteRenderer>().color = enemyColor;
+            GetComponent<SpriteRenderer>().color = specificEnemyColor;
         }
 
-        // Handle Bomb Spawning (Only when active)
         HandleBombSpawning();
             
         float distanceToPlayer = Vector2.Distance(transform.position, playerObj.transform.position);
 
-        // 1. Chase Player
         if (distanceToPlayer <= 5f)
         {
             agent.SetDestination(playerObj.transform.position);
+            HandleShooting(); 
         }
-        // 2. Roam Randomly
         else
         {
             if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
@@ -119,50 +144,65 @@ public class EnemyController : MonoBehaviour
         }
     }
 
+    void HandleShooting()
+    {
+        fireTimer += Time.deltaTime;
+
+        if (fireTimer >= fireInterval)
+        {
+            ShootAtPlayer();
+            fireTimer = 0f;
+        }
+    }
+
+    void ShootAtPlayer()
+    {
+        if (projectilePrefab == null || playerObj == null) return;
+
+        Vector3 direction = (playerObj.transform.position - transform.position).normalized;
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        Quaternion rotation = Quaternion.AngleAxis(angle, Vector3.forward);
+
+        GameObject bullet = Instantiate(projectilePrefab, transform.position, rotation);
+
+        bulletController bc = bullet.GetComponent<bulletController>();
+        if (bc != null)
+        {
+            bc.Initialise(false, bulletSpeed, 2f, 1f, 0f);
+        }
+
+        if (audioSource != null && shootSound != null)
+        {
+            audioSource.pitch = UnityEngine.Random.Range(0.9f, 1.1f);
+            audioSource.PlayOneShot(shootSound, sfxVolume * 0.5f); 
+        }
+    }
+
     void HandleBombSpawning()
     {
         if (bombPrefab == null) return;
-
         bombTimer += Time.deltaTime;
-
         if (bombTimer >= currentBombInterval)
         {
             SpawnBomb();
-            
-            // Reset timer and pick a NEW random interval for the next drop
             bombTimer = 0f;
             currentBombInterval = UnityEngine.Random.Range(minBombInterval, maxBombInterval);
         }
     }
-
-    void SpawnBomb()
-    {
-        // Instantiate the bomb at the enemy's current position
-        Instantiate(bombPrefab, transform.position, Quaternion.identity);
-    }
-
+    void SpawnBomb() { Instantiate(bombPrefab, transform.position, Quaternion.identity); }
     void SetNewRandomDestination()
     {
         Vector2 randomDir = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(2f, 5f);
         Vector3 targetPos = transform.position + new Vector3(randomDir.x, randomDir.y, 0);
-
         NavMeshHit hit;
-        if (NavMesh.SamplePosition(targetPos, out hit, 2.0f, NavMesh.AllAreas))
-        {
-            agent.SetDestination(hit.position);
-        }
+        if (NavMesh.SamplePosition(targetPos, out hit, 2.0f, NavMesh.AllAreas)) agent.SetDestination(hit.position);
     }
-
     void PaintTurfUnderEnemy()
     {
         if (turfTilemap == null || turfManager == null) return;
-
         Vector3Int cellPos = turfTilemap.WorldToCell(transform.position);
-        
         if (cellPos == lastCell) return;
-
         turfManager.RegisterTile(cellPos, false);
-
         lastCell = cellPos;
     }
 
@@ -180,13 +220,13 @@ public class EnemyController : MonoBehaviour
 
             transform.localScale -= Vector3.one * 0.2f;
 
+            // If too small, JUST DIE (No animation)
             if (transform.localScale.x <= 0.25f)
             {
                 if (deathSound != null)
                 {
                     AudioSource.PlayClipAtPoint(deathSound, transform.position, sfxVolume);
                 }
-                
                 Destroy(gameObject);
             }
         }

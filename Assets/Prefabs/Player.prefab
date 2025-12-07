@@ -431,9 +431,14 @@ MonoBehaviour:
   speed: 5
   MultiplierText: {fileID: 0}
   projectilePrefab: {fileID: 7049424773339979823, guid: bcfa19e077fc99d45801288df0b746f5, type: 3}
-  projectileSpeed: 5
+  projectileSpeed: 8
   maxHealth: 5
   hurtSound: {fileID: 8300000, guid: 38cb5552ba25eab4bb9b39d86c373f71, type: 3}
+  fullHealthColor: {r: 1, g: 1, b: 1, a: 1}
+  nearDeathColor: {r: 0.5019608, g: 0, b: 0.5019608, a: 1}
+  explosionRadius: 3
+  explosionDuration: 0.5
+  explosionPopScale: 2
   slowFireRate: 0.25
   fastFireRate: 0.1
   turfManager: {fileID: 0}

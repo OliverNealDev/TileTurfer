@@ -105,7 +105,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxHp: 3
-  explosionRadius: 3
+  explosionRadius: 4
   expansionDuration: 0.5
   targetExpansionScale: 3
   baseRotateSpeed: 45

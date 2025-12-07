@@ -1,12 +1,15 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEngine.UI;
 
+[RequireComponent(typeof(AudioSource))]
 public class TurfManager : MonoBehaviour
 {
     [Header("References")]
     public Tilemap turfTilemap;
     [SerializeField] private Slider turfSlider;
+    private TilemapRenderer tilemapRenderer; 
     
     [Header("Settings")]
     public bool startOwnedByEnemies;
@@ -18,9 +21,59 @@ public class TurfManager : MonoBehaviour
     public int ownedTiles = 0;
     public int enemyTiles = 0;
 
+    [Header("Audio")]
+    [SerializeField] private AudioClip pointSound;
+    [SerializeField] private float pointSoundInterval = 0.05f;
+    [SerializeField] private float basePitch = 1.0f; 
+    [SerializeField] private float pitchVariance = 0.1f;
+
+    [Header("Animation")]
+    [SerializeField] private float popDuration = 0.3f;
+    [SerializeField] private float popScale = 1.4f; 
+    
+    private AudioSource audioSource;
+    private int pointSoundQueue = 0;
+    private float pointSoundTimer = 0f;
+
+    void Awake()
+    {
+        audioSource = GetComponent<AudioSource>();
+        if (turfTilemap != null) 
+            tilemapRenderer = turfTilemap.GetComponent<TilemapRenderer>();
+    }
+
     void Start()
     {
         RecalculateTotalTiles();
+    }
+
+    void Update()
+    {
+        ProcessPointSoundQueue();
+    }
+
+    void ProcessPointSoundQueue()
+    {
+        if (pointSoundQueue > 0)
+        {
+            pointSoundTimer += Time.deltaTime;
+
+            if (pointSoundTimer >= pointSoundInterval)
+            {
+                PlayPointSound();
+                pointSoundQueue--;
+                pointSoundTimer = 0f;
+            }
+        }
+    }
+
+    void PlayPointSound()
+    {
+        if (audioSource != null && pointSound != null)
+        {
+            audioSource.pitch = basePitch + Random.Range(-pitchVariance, pitchVariance);
+            audioSource.PlayOneShot(pointSound);
+        }
     }
 
     void RecalculateTotalTiles()
@@ -36,7 +89,6 @@ public class TurfManager : MonoBehaviour
             {
                 totalTiles++;
                 
-                // Unlock tile to ensure we can color it later
                 turfTilemap.SetTileFlags(pos, TileFlags.None);
 
                 if (startOwnedByEnemies)
@@ -46,7 +98,6 @@ public class TurfManager : MonoBehaviour
                 }
                 else
                 {
-                    // If not starting as enemy, check if it's already painted in editor
                     Color c = turfTilemap.GetColor(pos);
                     if (IsColorSimilar(c, playerColor)) ownedTiles++;
                     else if (IsColorSimilar(c, enemyColor)) enemyTiles++;
@@ -64,16 +115,15 @@ public class TurfManager : MonoBehaviour
         Color currentColor = turfTilemap.GetColor(cellPos);
         Color targetColor = isPlayer ? playerColor : enemyColor;
 
-        // If tile is already the correct color, do nothing
         if (IsColorSimilar(currentColor, targetColor)) return;
 
-        // Logic for taking tiles
         if (isPlayer)
         {
-            // Player is capturing
             ownedTiles++;
+            pointSoundQueue++; // Only play sound for player
             
-            // If we stole it from the enemy, reduce their count
+            if (GameManager.Instance != null) GameManager.Instance.AddTilePainted();
+            
             if (IsColorSimilar(currentColor, enemyColor))
             {
                 enemyTiles--;
@@ -81,20 +131,66 @@ public class TurfManager : MonoBehaviour
         }
         else
         {
-            // Enemy is capturing
             enemyTiles++;
 
-            // If they stole it from player, reduce player count
             if (IsColorSimilar(currentColor, playerColor))
             {
                 ownedTiles--;
             }
         }
 
-        // Apply the visual change
+        // MOVED HERE: Spawns the effect for BOTH Player and Enemy
+        SpawnPopEffect(cellPos, targetColor);
+
         turfTilemap.SetColor(cellPos, targetColor);
         
         UpdateSlider();
+    }
+
+    void SpawnPopEffect(Vector3Int cellPos, Color color)
+    {
+        Sprite tileSprite = turfTilemap.GetSprite(cellPos);
+        if (tileSprite == null) return;
+
+        Vector3 worldPos = turfTilemap.GetCellCenterWorld(cellPos);
+
+        GameObject popObj = new GameObject("TilePopFX");
+        popObj.transform.position = worldPos;
+
+        SpriteRenderer sr = popObj.AddComponent<SpriteRenderer>();
+        sr.sprite = tileSprite;
+        sr.color = color;
+        
+        if (tilemapRenderer != null)
+        {
+            sr.sortingLayerID = tilemapRenderer.sortingLayerID;
+            sr.sortingOrder = tilemapRenderer.sortingOrder + 1; 
+        }
+
+        StartCoroutine(AnimatePopObject(popObj.transform));
+    }
+
+    IEnumerator AnimatePopObject(Transform objTransform)
+    {
+        float elapsed = 0f;
+        Vector3 startScale = Vector3.one;
+        Vector3 peakScale = new Vector3(popScale, popScale, 1f);
+
+        while (elapsed < popDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / popDuration;
+            
+            float curve = Mathf.Sin(t * Mathf.PI);
+            
+            if (objTransform != null)
+                objTransform.localScale = Vector3.Lerp(startScale, peakScale, curve);
+
+            yield return null;
+        }
+
+        if (objTransform != null)
+            Destroy(objTransform.gameObject);
     }
 
     void UpdateSlider()

@@ -149,6 +149,8 @@ public class BombController : MonoBehaviour
     {
         isExploding = true;
         bombCollider.enabled = false; 
+        
+        if (GameManager.Instance != null) GameManager.Instance.AddBombTriggered();
 
         if (lightObject != null) lightObject.SetActive(false);
 

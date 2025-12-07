@@ -14,11 +14,25 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private GameObject projectilePrefab;
     [SerializeField] private float projectileSpeed;
     
-    [Header("Health Settings")]
-    [SerializeField] private int maxHealth = 5;
-    private int currentHealth;
+    [Header("Health & Visuals")]
+    [SerializeField] private float maxHealth = 5f; // Changed to float
+    [SerializeField] private float healthRegenRate = 1.0f; // New: Regenerate 1 HP per second
+    private float currentHealth;
+    
     [SerializeField] private AudioClip hurtSound;
+    
+    [Tooltip("Color when at 100% Health (White)")]
+    [SerializeField] private Color fullHealthColor = Color.white;
+    [Tooltip("Color when at 0% Health (Red)")]
+    [SerializeField] private Color nearDeathColor = Color.red;
+    
     private SpriteRenderer spriteRenderer;
+
+    [Header("Death Explosion")]
+    [SerializeField] private int explosionRadius = 3;
+    [SerializeField] private float explosionDuration = 0.5f;
+    [SerializeField] private float explosionPopScale = 2f;
+    private bool isDead = false;
 
     [Header("Dynamic Fire Rate")]
     [SerializeField] private float slowFireRate = 0.5f; 
@@ -40,39 +54,64 @@ public class PlayerController : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         audioSource = GetComponent<AudioSource>();
         spriteRenderer = GetComponent<SpriteRenderer>();
+        
         currentHealth = maxHealth;
         currentFireDelay = slowFireRate;
+        
+        if (spriteRenderer != null) spriteRenderer.color = fullHealthColor;
     }
 
     void FixedUpdate()
     {
+        if (isDead) return;
         CheckMovementInputs();
         PaintTurfUnderPlayer();
     }
 
     void Update()
     {
+        if (isDead) return;
+
         TurnToCursor();
         CalculateFireRate();
+        
         if (timeSinceShot < currentFireDelay) timeSinceShot += Time.deltaTime;
+        
         CheckAttackInputs();
+        
+        HandleHealthRegen(); // <-- NEW REGEN LOGIC
+        UpdateColorBasedOnHealth();
     }
 
-    // ---------------- UPDATED COLLISION LOGIC ---------------- //
+    // ---------------- REGEN LOGIC ---------------- //
 
-    private void OnCollisionEnter2D(Collision2D other)
+    void HandleHealthRegen()
     {
-        // Check for Enemy Bullet via Physical Collision
-        if (other.gameObject.CompareTag("EnemyBullet"))
+        if (currentHealth < maxHealth)
         {
-            TakeDamage(1);
-            Destroy(other.gameObject); // Destroy the bullet immediately
+            currentHealth += healthRegenRate * Time.deltaTime;
+            
+            // Clamp to ensure we don't exceed max health
+            if (currentHealth > maxHealth) currentHealth = maxHealth;
         }
     }
 
-    // --------------------------------------------------------- //
+    // ---------------- COLLISION LOGIC ---------------- //
 
-    void TakeDamage(int damage)
+    private void OnCollisionEnter2D(Collision2D other)
+    {
+        if (isDead) return;
+
+        if (other.gameObject.CompareTag("EnemyBullet"))
+        {
+            TakeDamage(1f); // Bullet deals 1.0 damage
+            Destroy(other.gameObject); 
+        }
+    }
+
+    // ---------------- DAMAGE & DEATH ---------------- //
+
+    void TakeDamage(float damage)
     {
         currentHealth -= damage;
         Debug.Log("Player Health: " + currentHealth);
@@ -82,16 +121,77 @@ public class PlayerController : MonoBehaviour
             audioSource.PlayOneShot(hurtSound);
         }
 
+        // Force visual update immediately on hit
+        UpdateColorBasedOnHealth();
+
         if (currentHealth <= 0)
         {
-            Die();
+            StartCoroutine(ExplosionRoutine());
         }
     }
 
-    void Die()
+    void UpdateColorBasedOnHealth()
     {
+        float t = Mathf.Clamp01(currentHealth / maxHealth);
+        
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.color = Color.Lerp(nearDeathColor, fullHealthColor, t);
+        }
+    }
+
+    IEnumerator ExplosionRoutine()
+    {
+        isDead = true;
+        
+        rb.linearVelocity = Vector2.zero;
+        GetComponent<Collider2D>().enabled = false;
+
+        PaintExplosionArea();
+
+        float elapsed = 0f;
+        Vector3 startScale = transform.localScale;
+        Vector3 endScale = startScale * explosionPopScale;
+        Color startColor = spriteRenderer.color;
+
+        while (elapsed < explosionDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / explosionDuration;
+
+            transform.localScale = Vector3.Lerp(startScale, endScale, t);
+            
+            Color newColor = startColor;
+            newColor.a = Mathf.Lerp(1f, 0f, t);
+            spriteRenderer.color = newColor;
+
+            yield return null;
+        }
+
         Debug.Log("Player Died!");
+        if (GameManager.Instance != null) GameManager.Instance.TriggerGameOver();
+        
         gameObject.SetActive(false);
+    }
+
+    void PaintExplosionArea()
+    {
+        if (turfManager != null && turfTilemap != null)
+        {
+            Vector3Int centerCell = turfTilemap.WorldToCell(transform.position);
+
+            for (int x = -explosionRadius; x <= explosionRadius; x++)
+            {
+                for (int y = -explosionRadius; y <= explosionRadius; y++)
+                {
+                    if (Vector2.Distance(new Vector2(x, y), Vector2.zero) <= explosionRadius)
+                    {
+                        Vector3Int targetPos = centerCell + new Vector3Int(x, y, 0);
+                        turfManager.RegisterTile(targetPos, true);
+                    }
+                }
+            }
+        }
     }
 
     // ---------------- EXISTING LOGIC ---------------- //
@@ -126,6 +226,8 @@ public class PlayerController : MonoBehaviour
                 float basePitch = Mathf.Lerp(0.8f, 1.4f, fireIntensity);
                 audioSource.pitch = basePitch + Random.Range(-0.1f, 0.1f);
                 audioSource.PlayOneShot(shootSound);
+                
+                if (GameManager.Instance != null) GameManager.Instance.AddShot();
             }
             projectile.GetComponent<bulletController>().Initialise(true, projectileSpeed, 5f, 1f, 0f);
             timeSinceShot = 0f;

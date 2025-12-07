@@ -254,7 +254,7 @@ SpriteRenderer:
   m_SortingLayerID: -655889783
   m_SortingLayer: 1
   m_SortingOrder: 0
-  m_Sprite: {fileID: 21300000, guid: f5e305dd58bcdf04ea14737632fb215c, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 03ced89ecdb55d940a66670fa6099130, type: 3}
   m_Color: {r: 1, g: 0.25943398, b: 0.25943398, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -325,7 +325,7 @@ NavMeshAgent:
   m_Acceleration: 5
   avoidancePriority: 50
   m_AngularSpeed: 120
-  m_StoppingDistance: 5
+  m_StoppingDistance: 3
   m_AutoTraverseOffMeshLink: 1
   m_AutoBraking: 1
   m_AutoRepath: 1
@@ -349,12 +349,23 @@ MonoBehaviour:
   turfManager: {fileID: 0}
   turfTilemap: {fileID: 0}
   enemyColor: {r: 1, g: 0.25882354, b: 0.25882354, a: 1}
-  disabledColor: {r: 0.7169812, g: 0.18600929, b: 0.18600929, a: 0.7490196}
   minSizeMult: 0.9
   maxSizeMult: 1.1
   baseSpeed: 3.5
   colorVariance: 0.05
-  hitSound: {fileID: 8300000, guid: 38cb5552ba25eab4bb9b39d86c373f71, type: 3}
+  growthDuration: 0.5
+  maxHealth: 3
+  healthRegenRate: 0.5
+  damageFadeColor: {r: 0.5, g: 0, b: 0.5, a: 1}
+  deathPaintColor: {r: 0.2509804, g: 0.7294118, b: 1, a: 1}
+  maxInflationMult: 1.3
+  explosionDuration: 0.25
+  explosionPopScale: 2.5
+  deathExplosionRadius: 2
+  neutralSprite: {fileID: 21300000, guid: 03ced89ecdb55d940a66670fa6099130, type: 3}
+  angrySprite: {fileID: 21300000, guid: 12b81ecdfe295f146a0163b2d40420f9, type: 3}
+  rotationSpeed: 5
+  hitSound: {fileID: 8300000, guid: 6952008002402a9478a6a9f09444a838, type: 3}
   deathSound: {fileID: 8300000, guid: 9abb6b0a300a137488451f390876f9f8, type: 3}
   shootSound: {fileID: 0}
   sfxVolume: 1
@@ -362,8 +373,8 @@ MonoBehaviour:
   minBombInterval: 10
   maxBombInterval: 480
   projectilePrefab: {fileID: 7049424773339979823, guid: bcfa19e077fc99d45801288df0b746f5, type: 3}
-  fireRate: 4
-  bulletSpeed: 5
+  fireRate: 2
+  bulletSpeed: 8
 --- !u!50 &32429220687462609
 Rigidbody2D:
   serializedVersion: 5

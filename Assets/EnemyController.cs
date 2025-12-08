@@ -11,12 +11,14 @@ public class EnemyController : MonoBehaviour
     private NavMeshAgent agent;
     [SerializeField] private GameObject playerObj;
     
+    [Header("Debug")]
+    [SerializeField] private bool enableDebugLogs = true; // TOGGLE THIS OFF to stop console spam
+
     [Header("Turf Settings")]
     [SerializeField] private TurfManager turfManager;
     [SerializeField] private Tilemap turfTilemap;
     [SerializeField] private Color enemyColor;
     private bool isGrowing = true; 
-    private Vector3Int lastCell = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
     
     [Header("Variation Settings")]
     [SerializeField] private float minSizeMult = 0.85f;
@@ -28,7 +30,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float growthDuration = 0.5f; 
     private float growthTimer = 0f;
     
-    private Vector3 targetScale; // The "Base" size of this specific enemy
+    private Vector3 targetScale;
     private Color specificEnemyColor;
 
     [Header("Health & Damage")]
@@ -37,16 +39,26 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private Color damageFadeColor = new Color(0.5f, 0f, 0.5f, 1f); 
     [SerializeField] private Color deathPaintColor = new Color(0.3f, 0f, 1f, 1f); 
     
-    // --- NEW INFLATION SETTINGS ---
     [Header("Inflation & Explosion")]
-    [Tooltip("How much bigger they get at 0 HP (e.g., 1.5x size)")]
     [SerializeField] private float maxInflationMult = 1.5f; 
     [SerializeField] private float explosionDuration = 0.25f;
-    [SerializeField] private float explosionPopScale = 2.5f; // How big they get during the 'Pop' frame
+    [SerializeField] private float explosionPopScale = 2.5f; 
     [SerializeField] private int deathExplosionRadius = 2;
     
     private float currentHealth;
-    private bool isDead = false; // To stop logic during explosion animation
+    private bool isDead = false;
+
+    // --- AI SENSES ---
+    [Header("AI & Senses")]
+    [SerializeField] private float visionRange = 7f; 
+    [SerializeField] private float chasePersistenceDuration = 3f;
+    [Tooltip("Select 'Default' (Walls) and 'Player'. Do NOT select 'Enemy'.")]
+    [SerializeField] private LayerMask obstacleMask; 
+    private float lastSawPlayerTime = -10f; 
+
+    // State tracking for logs to prevent spamming the same log every frame
+    private enum AIState { Spawning, Roaming, ChasingMemory, ChasingVisible }
+    private AIState currentState = AIState.Spawning;
 
     [Header("Visuals")]
     [SerializeField] private Sprite neutralSprite;
@@ -102,9 +114,8 @@ public class EnemyController : MonoBehaviour
 
     void Start()
     {
-        if (!agent.isOnNavMesh) Debug.LogError("Enemy is NOT on NavMesh.");
+        if (!agent.isOnNavMesh) Debug.LogError($"[Enemy {gameObject.name}] NOT on NavMesh!");
 
-        // Variation Logic
         float sizeMultiplier = UnityEngine.Random.Range(minSizeMult, maxSizeMult);
         targetScale = new Vector3(sizeMultiplier, sizeMultiplier, 1f);
         agent.speed = baseSpeed / sizeMultiplier;
@@ -138,10 +149,9 @@ public class EnemyController : MonoBehaviour
 
     void Update()
     {
-        if (isDead) return; // Stop update loop if dying
+        if (isDead) return; 
         if (agent == null || playerObj == null) return;
         
-        // --- 1. HANDLE INITIAL SPAWN GROWTH ---
         if (isGrowing)
         {
             growthTimer += Time.deltaTime;
@@ -152,30 +162,54 @@ public class EnemyController : MonoBehaviour
             {
                 isGrowing = false;
                 transform.localScale = targetScale;
+                currentState = AIState.Roaming; // Ready to start AI
             }
         }
         else
         {
-            // --- 2. HANDLE HEALTH, REGEN & INFLATION ---
             if (currentHealth < maxHealth)
             {
                 currentHealth += healthRegenRate * Time.deltaTime;
                 if (currentHealth > maxHealth) currentHealth = maxHealth;
             }
 
-            // Visual Updates
             UpdateColorBasedOnHealth();
             UpdateInflationBasedOnHealth();
         }
-
-        // --- 3. MOVEMENT & LOGIC ---
         
         HandleBombSpawning();
-            
-        float distanceToPlayer = Vector2.Distance(transform.position, playerObj.transform.position);
+        HandleAI();
+    }
 
-        if (distanceToPlayer <= 5f)
+    void HandleAI()
+    {
+        if (isGrowing) return;
+
+        bool canSeePlayer = CheckLineOfSight();
+
+        if (canSeePlayer)
         {
+            lastSawPlayerTime = Time.time;
+            
+            // Log state change
+            if (currentState != AIState.ChasingVisible)
+            {
+                if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] ACQUIRED TARGET: Player Visible!");
+                currentState = AIState.ChasingVisible;
+            }
+        }
+
+        bool shouldChase = Time.time - lastSawPlayerTime < chasePersistenceDuration;
+
+        if (shouldChase)
+        {
+            // Log state change (Memory)
+            if (!canSeePlayer && currentState != AIState.ChasingMemory)
+            {
+                if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] LOST VISUAL: Chasing Memory...");
+                currentState = AIState.ChasingMemory;
+            }
+
             agent.SetDestination(playerObj.transform.position);
             
             if (angrySprite != null) spriteRenderer.sprite = angrySprite;
@@ -185,13 +219,21 @@ public class EnemyController : MonoBehaviour
             Quaternion targetRotation = Quaternion.AngleAxis(angle, Vector3.forward);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * rotationSpeed);
 
-            if (!isGrowing)
+            // Only shoot if we can ACTUALLY see them
+            if (canSeePlayer)
             {
-                HandleShooting(); 
+                HandleShooting();
             }
         }
         else
         {
+            // Log state change
+            if (currentState != AIState.Roaming)
+            {
+                if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] GAVE UP: Roaming.");
+                currentState = AIState.Roaming;
+            }
+
             if (neutralSprite != null) spriteRenderer.sprite = neutralSprite;
 
             if (agent.velocity.sqrMagnitude > 0.1f)
@@ -208,6 +250,43 @@ public class EnemyController : MonoBehaviour
         }
     }
 
+    bool CheckLineOfSight()
+    {
+        if (playerObj == null) return false;
+
+        float distance = Vector2.Distance(transform.position, playerObj.transform.position);
+        
+        if (distance > visionRange) return false;
+
+        Vector3 direction = (playerObj.transform.position - transform.position).normalized;
+        
+        // VISUAL DEBUG: Draw a Yellow line to show where the enemy is looking
+        if (enableDebugLogs) Debug.DrawRay(transform.position, direction * visionRange, Color.yellow);
+
+        // Perform Raycast
+        RaycastHit2D hit = Physics2D.Raycast(transform.position, direction, visionRange, obstacleMask);
+
+        if (hit.collider != null)
+        {
+            if (hit.collider.CompareTag("Player"))
+            {
+                if (enableDebugLogs) Debug.DrawLine(transform.position, hit.point, Color.green);
+                return true;
+            }
+            else
+            {
+                // DIAGNOSTIC LOG: This will tell you exactly what is blocking the view
+                if (enableDebugLogs) 
+                {
+                    Debug.Log($"[Enemy Vision] Blocked by: '{hit.collider.name}' on Layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}");
+                    Debug.DrawLine(transform.position, hit.point, Color.red);
+                }
+            }
+        }
+
+        return false;
+    }
+
     void UpdateColorBasedOnHealth()
     {
         float t = Mathf.Clamp01(currentHealth / maxHealth);
@@ -216,14 +295,9 @@ public class EnemyController : MonoBehaviour
 
     void UpdateInflationBasedOnHealth()
     {
-        // 1.0 Health = 0 Inflation. 
-        // 0.0 Health = Max Inflation.
         float healthPercent = Mathf.Clamp01(currentHealth / maxHealth);
         float damagePercent = 1f - healthPercent;
-
-        // Linear interpolation for scale multiplier: 1.0 -> maxInflationMult
         float currentScaleMult = 1f + (damagePercent * (maxInflationMult - 1f));
-
         transform.localScale = targetScale * currentScaleMult;
     }
 
@@ -241,6 +315,8 @@ public class EnemyController : MonoBehaviour
     void ShootAtPlayer()
     {
         if (projectilePrefab == null || playerObj == null) return;
+
+        if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] Fired Shot!");
 
         Vector3 direction = (playerObj.transform.position - transform.position).normalized;
         float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
@@ -273,7 +349,11 @@ public class EnemyController : MonoBehaviour
         }
     }
 
-    void SpawnBomb() { Instantiate(bombPrefab, transform.position, Quaternion.identity); }
+    void SpawnBomb() 
+    { 
+        if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] Dropped Bomb.");
+        Instantiate(bombPrefab, transform.position, Quaternion.identity); 
+    }
 
     void SetNewRandomDestination()
     {
@@ -283,16 +363,30 @@ public class EnemyController : MonoBehaviour
         if (NavMesh.SamplePosition(targetPos, out hit, 2.0f, NavMesh.AllAreas)) agent.SetDestination(hit.position);
     }
 
+    // --- PAINT LOGIC (Inner Half) ---
     void PaintTurfUnderEnemy()
     {
-        if (turfTilemap == null || turfManager == null) return;
-        Vector3Int cellPos = turfTilemap.WorldToCell(transform.position);
-        if (cellPos == lastCell) return;
-        turfManager.RegisterTile(cellPos, false);
-        lastCell = cellPos;
+        if (turfTilemap == null || turfManager == null || enemyCollider == null) return;
+
+        Bounds bounds = enemyCollider.bounds;
+        Vector3 center = bounds.center;
+        Vector3 innerExtents = bounds.extents * 0.5f;
+        Vector3 minPos = center - innerExtents;
+        Vector3 maxPos = center + innerExtents;
+
+        Vector3Int minCell = turfTilemap.WorldToCell(minPos);
+        Vector3Int maxCell = turfTilemap.WorldToCell(maxPos);
+
+        for (int x = minCell.x; x <= maxCell.x; x++)
+        {
+            for (int y = minCell.y; y <= maxCell.y; y++)
+            {
+                turfManager.RegisterTile(new Vector3Int(x, y, 0), false);
+            }
+        }
     }
 
-    private void OnCollisionEnter2D(Collision2D other)
+    private void OnTriggerEnter2D(Collider2D other)
     {
         if (isDead) return;
 
@@ -306,10 +400,10 @@ public class EnemyController : MonoBehaviour
                 audioSource.PlayOneShot(hitSound, sfxVolume);
             }
 
-            // Damage Logic
             currentHealth -= 1f;
+            
+            if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] Hit! HP Remaining: {currentHealth}");
 
-            // Updates happen next frame in Update(), but we can force visuals here if needed
             UpdateColorBasedOnHealth();
             UpdateInflationBasedOnHealth();
 
@@ -320,32 +414,38 @@ public class EnemyController : MonoBehaviour
         }
     }
 
+    void PlayDeathSound()
+    {
+        if (deathSound == null) return;
+
+        GameObject soundObj = new GameObject("TempDeathSound");
+        soundObj.transform.position = transform.position;
+        
+        AudioSource src = soundObj.AddComponent<AudioSource>();
+        src.clip = deathSound;
+        src.volume = sfxVolume;
+        src.spatialBlend = 0f; 
+        
+        src.Play();
+        Destroy(soundObj, deathSound.length + 0.1f);
+    }
+
     IEnumerator ExplosionRoutine()
     {
+        if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] Exploding!");
         isDead = true;
         
-        // 1. Disable Interactions
         if (enemyCollider != null) enemyCollider.enabled = false;
         if (agent != null) agent.enabled = false;
 
-        // 2. Gameplay Logic (Score, Sound, Paint)
         if (GameManager.Instance != null) GameManager.Instance.AddKill();
                 
-        if (deathSound != null)
-        {
-            AudioSource.PlayClipAtPoint(deathSound, transform.position, sfxVolume);
-        }
-
+        PlayDeathSound();
         PaintExplosionArea();
 
-        // 3. Visual Pop Animation (Mirrors BombController)
         float elapsed = 0f;
-        
-        // Start from current inflated size
         Vector3 startScale = transform.localScale;
-        // Pop to target size
         Vector3 endScale = targetScale * explosionPopScale; 
-        
         Color startColor = spriteRenderer.color;
 
         while (elapsed < explosionDuration)
@@ -353,10 +453,8 @@ public class EnemyController : MonoBehaviour
             elapsed += Time.deltaTime;
             float t = elapsed / explosionDuration;
 
-            // Expand
             transform.localScale = Vector3.Lerp(startScale, endScale, t);
             
-            // Fade Out
             Color newColor = startColor;
             newColor.a = Mathf.Lerp(1f, 0f, t);
             spriteRenderer.color = newColor;
@@ -380,7 +478,6 @@ public class EnemyController : MonoBehaviour
                     if (Vector2.Distance(new Vector2(x, y), Vector2.zero) <= deathExplosionRadius)
                     {
                         Vector3Int targetPos = centerCell + new Vector3Int(x, y, 0);
-                        
                         turfManager.RegisterTile(targetPos, true);
                         turfTilemap.SetColor(targetPos, deathPaintColor);
                     }

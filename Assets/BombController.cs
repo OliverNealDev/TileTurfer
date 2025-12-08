@@ -24,18 +24,21 @@ public class BombController : MonoBehaviour
 
     [Header("Audio & FX")]
     [SerializeField] private AudioClip beepSound;
-    [Range(0f, 1f)] [SerializeField] private float beepVolume = 0.5f; // <-- NEW
+    [Range(0f, 1f)] [SerializeField] private float beepVolume = 0.5f;
     
     [SerializeField] private AudioClip explodeSound;
-    [Range(0f, 1f)] [SerializeField] private float explosionVolume = 1.0f; // <-- NEW
+    [Range(0f, 1f)] [SerializeField] private float explosionVolume = 1.0f;
     
-    [SerializeField] private GameObject lightObject; 
+    [Tooltip("Color to flash the sprite when beeping")]
+    [SerializeField] private Color flashColor = Color.red; // <-- NEW: Flash Color
+    
     [SerializeField] private float baseBeepInterval = 1.0f; 
-    [Tooltip("How long the light stays ON during a beep (in seconds)")]
+    [Tooltip("How long the flash stays ON during a beep (in seconds)")]
     [SerializeField] private float lightFlashDuration = 0.1f;
     
     private float timeSinceLastBeep;
     private AudioSource audioSource;
+    private Color originalSpriteColor; // Store original color
 
     [Header("References")]
     [SerializeField] private TurfManager turfManager;
@@ -52,7 +55,8 @@ public class BombController : MonoBehaviour
         if (spriteRenderer == null) spriteRenderer = GetComponentInChildren<SpriteRenderer>();
         if (bombCollider == null) bombCollider = GetComponent<Collider2D>();
 
-        if (lightObject != null) lightObject.SetActive(false);
+        // Store the initial color (e.g. White) so we can revert back to it
+        if (spriteRenderer != null) originalSpriteColor = spriteRenderer.color;
     }
 
     void Update()
@@ -89,20 +93,24 @@ public class BombController : MonoBehaviour
 
     IEnumerator DoBeep()
     {
-        // 1. Play Sound with custom Volume
+        // 1. Play Sound
         if (audioSource != null && beepSound != null)
         {
             audioSource.pitch = Random.Range(0.95f, 1.05f); 
-            // Pass the volume variable as the second argument
             audioSource.PlayOneShot(beepSound, beepVolume);
         }
 
-        // 2. Flash Light
-        if (lightObject != null)
+        // 2. Flash Sprite Color (Instead of Light Object)
+        if (spriteRenderer != null)
         {
-            lightObject.SetActive(true);
+            spriteRenderer.color = flashColor; // Turn Red
+            
             yield return new WaitForSeconds(lightFlashDuration); 
-            if (!isExploding) lightObject.SetActive(false);
+            
+            if (!isExploding) 
+            {
+                spriteRenderer.color = originalSpriteColor; // Revert to White
+            }
         }
     }
 
@@ -112,7 +120,7 @@ public class BombController : MonoBehaviour
         return 1f + (damageFactor * 1.5f);
     }
 
-    private void OnCollisionEnter2D(Collision2D other)
+    private void OnTriggerEnter2D(Collider2D other)
     {
         if (isExploding) return;
 
@@ -127,9 +135,10 @@ public class BombController : MonoBehaviour
     {
         currentHp--;
         
-        timeSinceLastBeep = 100f; 
+        timeSinceLastBeep = 100f; // Force immediate beep
 
-        StartCoroutine(FlashColor());
+        // Use the same flash logic for damage feedback
+        StartCoroutine(HitFlash());
 
         if (currentHp <= 0)
         {
@@ -137,12 +146,14 @@ public class BombController : MonoBehaviour
         }
     }
 
-    IEnumerator FlashColor()
+    IEnumerator HitFlash()
     {
-        Color original = spriteRenderer.color;
-        spriteRenderer.color = Color.white;
-        yield return new WaitForSeconds(0.05f);
-        spriteRenderer.color = original;
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.color = Color.white; // Bright white flash on hit
+            yield return new WaitForSeconds(0.05f);
+            if (!isExploding) spriteRenderer.color = originalSpriteColor;
+        }
     }
 
     IEnumerator ExplodeSequence()
@@ -152,12 +163,12 @@ public class BombController : MonoBehaviour
         
         if (GameManager.Instance != null) GameManager.Instance.AddBombTriggered();
 
-        if (lightObject != null) lightObject.SetActive(false);
+        // Ensure we start fading from the current color state
+        if (spriteRenderer != null) spriteRenderer.color = originalSpriteColor;
 
         if (audioSource != null && explodeSound != null)
         {
             audioSource.pitch = Random.Range(0.8f, 1.2f);
-            // Pass the volume variable as the second argument
             audioSource.PlayOneShot(explodeSound, explosionVolume);
         }
 

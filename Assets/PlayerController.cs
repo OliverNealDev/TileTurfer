@@ -8,6 +8,7 @@ public class PlayerController : MonoBehaviour
 {
     [SerializeField] private float speed = 6f;
     private Rigidbody2D rb;
+    private Collider2D playerCollider; // Reference for bounds
     [SerializeField] private TextMeshProUGUI MultiplierText;
     
     [Header("Combat Settings")]
@@ -15,8 +16,8 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float projectileSpeed;
     
     [Header("Health & Visuals")]
-    [SerializeField] private float maxHealth = 5f; // Changed to float
-    [SerializeField] private float healthRegenRate = 1.0f; // New: Regenerate 1 HP per second
+    [SerializeField] private float maxHealth = 5f; 
+    [SerializeField] private float healthRegenRate = 1.0f;
     private float currentHealth;
     
     [SerializeField] private AudioClip hurtSound;
@@ -43,15 +44,20 @@ public class PlayerController : MonoBehaviour
     [Header("Turf Settings")]
     [SerializeField] private TurfManager turfManager;
     [SerializeField] private Tilemap turfTilemap;
-    private Vector3Int lastCell = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
+    
+    [Tooltip("Size of the painting area relative to the player size. 0.5 = Inner Half.")]
+    [Range(0.1f, 1f)] [SerializeField] private float paintSensitivity = 0.5f; // <-- NEW SETTING
     
     [Header("Audio")]
     private AudioSource audioSource;
     [SerializeField] private AudioClip shootSound;
+    
+    
 
     void Awake()
     { 
         rb = GetComponent<Rigidbody2D>();
+        playerCollider = GetComponent<Collider2D>();
         audioSource = GetComponent<AudioSource>();
         spriteRenderer = GetComponent<SpriteRenderer>();
         
@@ -79,37 +85,63 @@ public class PlayerController : MonoBehaviour
         
         CheckAttackInputs();
         
-        HandleHealthRegen(); // <-- NEW REGEN LOGIC
+        HandleHealthRegen();
         UpdateColorBasedOnHealth();
     }
 
-    // ---------------- REGEN LOGIC ---------------- //
+    // ---------------- UPDATED PAINT LOGIC ---------------- //
+
+    void PaintTurfUnderPlayer()
+    {
+        if (turfTilemap == null || turfManager == null || playerCollider == null) return;
+
+        // 1. Get the center of the player
+        Bounds bounds = playerCollider.bounds;
+        Vector3 center = bounds.center;
+
+        // 2. Calculate "Inner" extents (Half-Size * Sensitivity)
+        // If Sensitivity is 0.5, we check a box half the size of the player
+        Vector3 innerExtents = bounds.extents * paintSensitivity;
+
+        // 3. Calculate Min/Max world positions for this smaller box
+        Vector3 minPos = center - innerExtents;
+        Vector3 maxPos = center + innerExtents;
+
+        // 4. Convert to Grid Cells
+        Vector3Int minCell = turfTilemap.WorldToCell(minPos);
+        Vector3Int maxCell = turfTilemap.WorldToCell(maxPos);
+
+        // 5. Paint
+        for (int x = minCell.x; x <= maxCell.x; x++)
+        {
+            for (int y = minCell.y; y <= maxCell.y; y++)
+            {
+                turfManager.RegisterTile(new Vector3Int(x, y, 0), true);
+            }
+        }
+    }
+
+    // ----------------------------------------------------- //
 
     void HandleHealthRegen()
     {
         if (currentHealth < maxHealth)
         {
             currentHealth += healthRegenRate * Time.deltaTime;
-            
-            // Clamp to ensure we don't exceed max health
             if (currentHealth > maxHealth) currentHealth = maxHealth;
         }
     }
 
-    // ---------------- COLLISION LOGIC ---------------- //
-
-    private void OnCollisionEnter2D(Collision2D other)
+    private void OnTriggerEnter2D(Collider2D other)
     {
         if (isDead) return;
 
         if (other.gameObject.CompareTag("EnemyBullet"))
         {
-            TakeDamage(1f); // Bullet deals 1.0 damage
+            TakeDamage(1f); 
             Destroy(other.gameObject); 
         }
     }
-
-    // ---------------- DAMAGE & DEATH ---------------- //
 
     void TakeDamage(float damage)
     {
@@ -121,7 +153,6 @@ public class PlayerController : MonoBehaviour
             audioSource.PlayOneShot(hurtSound);
         }
 
-        // Force visual update immediately on hit
         UpdateColorBasedOnHealth();
 
         if (currentHealth <= 0)
@@ -145,7 +176,7 @@ public class PlayerController : MonoBehaviour
         isDead = true;
         
         rb.linearVelocity = Vector2.zero;
-        GetComponent<Collider2D>().enabled = false;
+        if (playerCollider != null) playerCollider.enabled = false;
 
         PaintExplosionArea();
 
@@ -194,8 +225,6 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    // ---------------- EXISTING LOGIC ---------------- //
-
     void CalculateFireRate()
     {
         if (turfManager != null) currentFireDelay = Mathf.Lerp(slowFireRate, fastFireRate, turfManager.GetTurfPercentage());
@@ -240,14 +269,5 @@ public class PlayerController : MonoBehaviour
         var screenPos = new Vector3(mousePos.x, mousePos.y, Camera.main.WorldToScreenPoint(transform.position).z);
         Vector3 world = Camera.main.ScreenToWorldPoint(screenPos);
         transform.right = Vector3.ProjectOnPlane(world - transform.position, Vector3.forward).normalized;
-    }
-
-    void PaintTurfUnderPlayer()
-    {
-        if (turfTilemap == null || turfManager == null) return;
-        Vector3Int cellPos = turfTilemap.WorldToCell(transform.position);
-        if (cellPos == lastCell) return;
-        turfManager.RegisterTile(cellPos, true);
-        lastCell = cellPos;
     }
 }

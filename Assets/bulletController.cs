@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 
@@ -9,10 +10,13 @@ public class bulletController : MonoBehaviour
     [SerializeField] private float knockbackForce = 5f;
     [SerializeField] private float size = 1f;
     [SerializeField] private float stunDuration = 0f;
+
+    private PolygonCollider2D bulletCollider2D;
     
     void Start()
     {
         StartCoroutine(DespawnSequence());
+        bulletCollider2D = GetComponent<PolygonCollider2D>();
     }
 
     public void Initialise(
@@ -36,12 +40,15 @@ public class bulletController : MonoBehaviour
         if (isPlayerBullet)
         {
             gameObject.tag = "PlayerBullet";
-            transform.GetChild(0).GetComponent<SpriteRenderer>().color = new Color32(64, 186, 255, 255);
+            //transform.GetChild(0).GetComponent<SpriteRenderer>().color = new Color32(64, 186, 255, 255);
+            transform.GetChild(0).GetComponent<SpriteRenderer>().color = new Color32(44, 131, 181, 255);
         }
         else
         {
             gameObject.tag = "EnemyBullet";
-            transform.GetChild(0).GetComponent<SpriteRenderer>().color = new Color32(255, 66, 66, 255);
+            //transform.GetChild(0).GetComponent<SpriteRenderer>().color = new Color32(255, 66, 66, 255);
+            transform.GetChild(0).GetComponent<SpriteRenderer>().color = new Color32(209, 52, 52, 255);
+
         }
     }
 
@@ -70,4 +77,34 @@ public class bulletController : MonoBehaviour
 
         Destroy(gameObject);
     }
+    
+    IEnumerator InstantDespawnSequence()
+    {
+        float duration = 0.25f;
+        float elapsed = 0f;
+        
+        Vector3 startScale = transform.localScale;
+        SpriteRenderer sr = transform.GetChild(0).GetComponent<SpriteRenderer>();
+        Color startColor = sr.color;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / duration;
+
+            transform.localScale = Vector3.Lerp(startScale, Vector3.zero, t);
+            
+            sr.color = new Color(startColor.r, startColor.g, startColor.b, Mathf.Lerp(startColor.a, 0f, t));
+
+            yield return null;
+        }
+
+        Destroy(gameObject);
+    }
+
+    /*private void OnTriggerEnter2D(Collider2D other)
+    {
+        StopCoroutine(DespawnSequence());
+        StartCoroutine(InstantDespawnSequence());
+    }*/
 }

@@ -10,13 +10,13 @@ GameObject:
   m_Component:
   - component: {fileID: 5219905905893273646}
   - component: {fileID: 6926782129647836037}
-  m_Layer: 0
+  m_Layer: 14
   m_Name: Triangle
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &5219905905893273646
 Transform:
   m_ObjectHideFlags: 0
@@ -97,7 +97,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5668858678822164534}
   - component: {fileID: 2470775792782244865}
-  m_Layer: 0
+  m_Layer: 14
   m_Name: Light 2D (1)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -171,7 +171,7 @@ MonoBehaviour:
   - {x: 0.5, y: -0.5, z: 0}
   - {x: 0.5, y: 0.5, z: 0}
   - {x: -0.5, y: 0.5, z: 0}
---- !u!1 &4104979687966800390
+--- !u!1 &3362146101564440567
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -179,37 +179,37 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 214906780122312633}
-  - component: {fileID: 8608891541409242525}
-  m_Layer: 0
+  - component: {fileID: 6669958165701160229}
+  - component: {fileID: 3919838813232203869}
+  m_Layer: 14
   m_Name: Circle
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &214906780122312633
+--- !u!4 &6669958165701160229
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4104979687966800390}
+  m_GameObject: {fileID: 3362146101564440567}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 5.5, y: 5.5, z: 5.5}
+  m_LocalScale: {x: 1.1, y: 1.1, z: 1.1}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 913490037734797538}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!212 &8608891541409242525
+--- !u!212 &3919838813232203869
 SpriteRenderer:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4104979687966800390}
+  m_GameObject: {fileID: 3362146101564440567}
   m_Enabled: 1
   m_CastShadows: 0
   m_ReceiveShadows: 0
@@ -244,11 +244,11 @@ SpriteRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_Sprite: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
-  m_Color: {r: 0, g: 0, b: 0, a: 0.44705883}
+  m_SortingLayerID: -655889783
+  m_SortingLayer: 1
+  m_SortingOrder: -1
+  m_Sprite: {fileID: -2413806693520163455, guid: a86470a33a6bf42c4b3595704624658b, type: 3}
+  m_Color: {r: 0, g: 0, b: 0, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -272,9 +272,9 @@ GameObject:
   - component: {fileID: 4592283478323188152}
   - component: {fileID: 1669248069227456480}
   - component: {fileID: 511433945978486716}
-  m_Layer: 0
+  m_Layer: 14
   m_Name: Player
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -289,13 +289,13 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0.5, y: 0.5, z: 0}
-  m_LocalScale: {x: 0.75, y: 0.75, z: 0.75}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 5219905905893273646}
   - {fileID: 2309714335502161284}
   - {fileID: 5668858678822164534}
-  - {fileID: 214906780122312633}
+  - {fileID: 6669958165701160229}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!212 &2482177123408479010
@@ -342,7 +342,7 @@ SpriteRenderer:
   m_SortingLayerID: -655889783
   m_SortingLayer: 1
   m_SortingOrder: 0
-  m_Sprite: {fileID: 21300000, guid: f5e305dd58bcdf04ea14737632fb215c, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 03ced89ecdb55d940a66670fa6099130, type: 3}
   m_Color: {r: 0.25, g: 0.72877645, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -432,9 +432,10 @@ MonoBehaviour:
   MultiplierText: {fileID: 0}
   projectilePrefab: {fileID: 7049424773339979823, guid: bcfa19e077fc99d45801288df0b746f5, type: 3}
   projectileSpeed: 8
-  maxHealth: 5
-  hurtSound: {fileID: 8300000, guid: 38cb5552ba25eab4bb9b39d86c373f71, type: 3}
-  fullHealthColor: {r: 1, g: 1, b: 1, a: 1}
+  maxHealth: 10
+  healthRegenRate: 1
+  hurtSound: {fileID: 8300000, guid: 6952008002402a9478a6a9f09444a838, type: 3}
+  fullHealthColor: {r: 0.2509804, g: 0.7294118, b: 1, a: 1}
   nearDeathColor: {r: 0.5019608, g: 0, b: 0.5019608, a: 1}
   explosionRadius: 3
   explosionDuration: 0.5
@@ -443,6 +444,7 @@ MonoBehaviour:
   fastFireRate: 0.1
   turfManager: {fileID: 0}
   turfTilemap: {fileID: 0}
+  paintSensitivity: 0.5
   shootSound: {fileID: 8300000, guid: 6961ad4f959b51c4d8868ef0d3803156, type: 3}
 --- !u!82 &511433945978486716
 AudioSource:
@@ -551,7 +553,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2309714335502161284}
   - component: {fileID: 3348846763190326417}
-  m_Layer: 0
+  m_Layer: 14
   m_Name: Light 2D
   m_TagString: Untagged
   m_Icon: {fileID: 0}

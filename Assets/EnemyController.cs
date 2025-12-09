@@ -327,7 +327,7 @@ public class EnemyController : MonoBehaviour
         bulletController bc = bullet.GetComponent<bulletController>();
         if (bc != null)
         {
-            bc.Initialise(false, bulletSpeed, 2f, 1f, 0f);
+            bc.Initialise(false, bulletSpeed, 2f, 1f, 0f, enemyCollider);
         }
 
         if (audioSource != null && shootSound != null)
@@ -357,7 +357,7 @@ public class EnemyController : MonoBehaviour
 
     void SetNewRandomDestination()
     {
-        Vector2 randomDir = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(2f, 5f);
+        Vector2 randomDir = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(4f, 12f);
         Vector3 targetPos = transform.position + new Vector3(randomDir.x, randomDir.y, 0);
         NavMeshHit hit;
         if (NavMesh.SamplePosition(targetPos, out hit, 2.0f, NavMesh.AllAreas)) agent.SetDestination(hit.position);
@@ -386,14 +386,12 @@ public class EnemyController : MonoBehaviour
         }
     }
 
-    private void OnTriggerEnter2D(Collider2D other)
+    private void OnCollisionEnter2D(Collision2D other)
     {
         if (isDead) return;
 
         if (other.gameObject.CompareTag("PlayerBullet"))
         {
-            Destroy(other.gameObject);
-            
             if (audioSource != null && hitSound != null)
             {
                 audioSource.pitch = UnityEngine.Random.Range(0.9f, 1.1f);

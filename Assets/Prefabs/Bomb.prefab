@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 2763837971816126596}
   - component: {fileID: 5005351320213189255}
   - component: {fileID: -6891682908306911371}
-  m_Layer: 0
+  m_Layer: 14
   m_Name: Bomb
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -83,7 +83,7 @@ SpriteRenderer:
   m_SortingLayer: 1
   m_SortingOrder: 0
   m_Sprite: {fileID: 21300000, guid: 6de4d0630572bf142af0ec6ff1d36ab3, type: 3}
-  m_Color: {r: 0.7529412, g: 0, b: 0.23022246, a: 1}
+  m_Color: {r: 1, g: 0.25882354, b: 0.25882354, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -106,19 +106,22 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxHp: 3
-  explosionRadius: 4
+  healthRegenRate: 0.25
+  damageColor: {r: 0.6, g: 0, b: 0.8, a: 1}
+  paintBulletPrefab: {fileID: 7049424773339979823, guid: 2d0802e8a7934954f85637fab6864fab, type: 3}
+  maxFireInterval: 1
+  minFireInterval: 0.25
+  lifetime: 60
+  explosionRadius: 2
   expansionDuration: 0.15
-  targetExpansionScale: 6
+  targetExpansionScale: 3
+  swellColor: {r: 0.6, g: 0, b: 0.8, a: 1}
   baseRotateSpeed: 60
-  basePulseSpeed: 3
-  pulseAmount: 0.1
-  beepSound: {fileID: 8300000, guid: 596f857f0d97bc04e98711393f35b97a, type: 3}
-  beepVolume: 0
+  shotPulseAmount: 1.2
+  shotPulseDuration: 0.2
   explodeSound: {fileID: 8300000, guid: 9abb6b0a300a137488451f390876f9f8, type: 3}
   explosionVolume: 1
-  flashColor: {r: 0.9150943, g: 0.07338022, b: 0.24914162, a: 1}
-  baseBeepInterval: 1
-  lightFlashDuration: 0.25
+  paintShootSound: {fileID: 0}
   turfManager: {fileID: 0}
   spriteRenderer: {fileID: 0}
   bombCollider: {fileID: 0}
@@ -292,7 +295,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8417267410389303604}
   - component: {fileID: 964400778934610394}
-  m_Layer: 0
+  m_Layer: 14
   m_Name: Circle
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -379,7 +382,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1310586137782354555}
   - component: {fileID: 5256968028943052111}
-  m_Layer: 0
+  m_Layer: 14
   m_Name: Light 2D
   m_TagString: Untagged
   m_Icon: {fileID: 0}

@@ -5,45 +5,47 @@ using UnityEngine.Tilemaps;
 [RequireComponent(typeof(AudioSource))]
 public class BombController : MonoBehaviour
 {
-    [Header("Health Settings")]
-    [SerializeField] private int maxHp = 3;
-    private int currentHp;
+    [Header("Health & Regen")]
+    [SerializeField] private float maxHp = 5f; 
+    [SerializeField] private float healthRegenRate = 1.0f; 
+    [SerializeField] private Color damageColor = new Color(0.6f, 0f, 0.8f, 1f); // Purple
+    private float currentHp;
     private bool isExploding = false;
+    
+    // REMOVED: isHitFlashing variable
+
+    [Header("Passive Paint Shooting")]
+    [SerializeField] private GameObject paintBulletPrefab;
+    [SerializeField] private float maxFireInterval = 3.0f;
+    [SerializeField] private float minFireInterval = 0.5f;
 
     [Header("Explosion Settings")]
-    [Tooltip("Radius in grid units to paint")]
+    [SerializeField] private float lifetime = 15f; 
     [SerializeField] private int explosionRadius = 3;
     [SerializeField] private float expansionDuration = 0.25f; 
     [SerializeField] private float targetExpansionScale = 3f;
+    [SerializeField] private Color swellColor = new Color(0.6f, 0f, 0.8f, 1f); 
     
     [Header("Animation Settings")]
     [SerializeField] private float baseRotateSpeed = 45f;
-    [SerializeField] private float basePulseSpeed = 2f;
-    [SerializeField] private float pulseAmount = 0.2f; 
+    [SerializeField] private float shotPulseAmount = 1.2f; 
+    [SerializeField] private float shotPulseDuration = 0.2f; 
     private Vector3 initialScale;
 
     [Header("Audio & FX")]
-    [SerializeField] private AudioClip beepSound;
-    [Range(0f, 1f)] [SerializeField] private float beepVolume = 0.5f;
-    
     [SerializeField] private AudioClip explodeSound;
     [Range(0f, 1f)] [SerializeField] private float explosionVolume = 1.0f;
+    [SerializeField] private AudioClip paintShootSound;
     
-    [Tooltip("Color to flash the sprite when beeping")]
-    [SerializeField] private Color flashColor = Color.red; // <-- NEW: Flash Color
-    
-    [SerializeField] private float baseBeepInterval = 1.0f; 
-    [Tooltip("How long the flash stays ON during a beep (in seconds)")]
-    [SerializeField] private float lightFlashDuration = 0.1f;
-    
-    private float timeSinceLastBeep;
     private AudioSource audioSource;
-    private Color originalSpriteColor; // Store original color
+    private Color baseColor; 
 
     [Header("References")]
     [SerializeField] private TurfManager turfManager;
     [SerializeField] private SpriteRenderer spriteRenderer;
     [SerializeField] private Collider2D bombCollider;
+
+    private Coroutine pulseCoroutine; 
 
     void Start()
     {
@@ -55,90 +57,48 @@ public class BombController : MonoBehaviour
         if (spriteRenderer == null) spriteRenderer = GetComponentInChildren<SpriteRenderer>();
         if (bombCollider == null) bombCollider = GetComponent<Collider2D>();
 
-        // Store the initial color (e.g. White) so we can revert back to it
-        if (spriteRenderer != null) originalSpriteColor = spriteRenderer.color;
+        if (spriteRenderer != null) baseColor = spriteRenderer.color;
+
+        StartCoroutine(FizzleSequence());
+        StartCoroutine(PassivePaintRoutine());
     }
 
     void Update()
     {
         if (isExploding) return;
 
-        HandlePassiveAnimation();
-        HandleBeeping();
+        HandleHealthRegen();
+        HandleVisualColor();
+        HandleRotation(); 
     }
 
-    void HandlePassiveAnimation()
+    void HandleHealthRegen()
     {
-        float speedMultiplier = GetSpeedMultiplier();
-
-        transform.Rotate(Vector3.forward * baseRotateSpeed * speedMultiplier * Time.deltaTime);
-
-        float pulse = Mathf.Sin(Time.time * basePulseSpeed * speedMultiplier) * pulseAmount;
-        transform.localScale = initialScale + (Vector3.one * pulse);
-    }
-
-    void HandleBeeping()
-    {
-        float speedMultiplier = GetSpeedMultiplier();
-        float currentInterval = baseBeepInterval / speedMultiplier;
-
-        timeSinceLastBeep += Time.deltaTime;
-
-        if (timeSinceLastBeep >= currentInterval)
+        if (currentHp < maxHp)
         {
-            StartCoroutine(DoBeep());
-            timeSinceLastBeep = 0f;
+            currentHp += healthRegenRate * Time.deltaTime;
+            if (currentHp > maxHp) currentHp = maxHp;
         }
     }
 
-    IEnumerator DoBeep()
+    void HandleVisualColor()
     {
-        // 1. Play Sound
-        if (audioSource != null && beepSound != null)
-        {
-            audioSource.pitch = Random.Range(0.95f, 1.05f); 
-            audioSource.PlayOneShot(beepSound, beepVolume);
-        }
+        if (spriteRenderer == null) return;
 
-        // 2. Flash Sprite Color (Instead of Light Object)
-        if (spriteRenderer != null)
-        {
-            spriteRenderer.color = flashColor; // Turn Red
-            
-            yield return new WaitForSeconds(lightFlashDuration); 
-            
-            if (!isExploding) 
-            {
-                spriteRenderer.color = originalSpriteColor; // Revert to White
-            }
-        }
+        // Simplified: Only calculate color based on HP (White -> Purple)
+        float healthPercent = Mathf.Clamp01(currentHp / maxHp);
+        
+        // Lerp from damageColor (0% HP) to baseColor (100% HP)
+        spriteRenderer.color = Color.Lerp(damageColor, baseColor, healthPercent);
     }
 
-    float GetSpeedMultiplier()
-    {
-        float damageFactor = (float)(maxHp - currentHp);
-        return 1f + (damageFactor * 1.5f);
-    }
-
-    private void OnTriggerEnter2D(Collider2D other)
+    public void TakeDamage(float damageAmount = 1f)
     {
         if (isExploding) return;
 
-        if (other.gameObject.CompareTag("PlayerBullet"))
-        {
-            TakeDamage();
-            Destroy(other.gameObject); 
-        }
-    }
-
-    void TakeDamage()
-    {
-        currentHp--;
+        currentHp -= damageAmount;
         
-        timeSinceLastBeep = 100f; // Force immediate beep
-
-        // Use the same flash logic for damage feedback
-        StartCoroutine(HitFlash());
+        // REMOVED: StartCoroutine(HitFlashRoutine());
 
         if (currentHp <= 0)
         {
@@ -146,14 +106,80 @@ public class BombController : MonoBehaviour
         }
     }
 
-    IEnumerator HitFlash()
+    IEnumerator PassivePaintRoutine()
     {
-        if (spriteRenderer != null)
+        yield return new WaitForSeconds(0.5f);
+
+        while (!isExploding)
         {
-            spriteRenderer.color = Color.white; // Bright white flash on hit
-            yield return new WaitForSeconds(0.05f);
-            if (!isExploding) spriteRenderer.color = originalSpriteColor;
+            ShootPaintBullet();
+
+            float damagePercent = Mathf.Clamp01(currentHp / maxHp);
+            float currentInterval = Mathf.Lerp(minFireInterval, maxFireInterval, damagePercent);
+
+            yield return new WaitForSeconds(currentInterval);
         }
+    }
+
+    void ShootPaintBullet()
+    {
+        if (paintBulletPrefab == null) return;
+
+        if (pulseCoroutine != null) StopCoroutine(pulseCoroutine);
+        pulseCoroutine = StartCoroutine(ShootPulseAnimation());
+
+        Vector2 randomDir = Random.insideUnitCircle.normalized;
+        Vector3 spawnPos = transform.position + (Vector3)(randomDir * 0.6f);
+        GameObject paintProj = Instantiate(paintBulletPrefab, spawnPos, Quaternion.identity);
+        paintProj.transform.right = randomDir;
+
+        PaintBullet pb = paintProj.GetComponent<PaintBullet>();
+        if (pb != null)
+        {
+            pb.Initialise(bombCollider, false); 
+        }
+
+        if (audioSource != null && paintShootSound != null)
+        {
+            audioSource.PlayOneShot(paintShootSound, 0.3f);
+        }
+    }
+
+    void HandleRotation()
+    {
+        float speedMultiplier = GetSpeedMultiplier();
+        transform.Rotate(Vector3.forward * baseRotateSpeed * speedMultiplier * Time.deltaTime);
+    }
+
+    IEnumerator ShootPulseAnimation()
+    {
+        float halfDuration = shotPulseDuration / 2f;
+        float elapsed = 0f;
+        
+        while (elapsed < halfDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / halfDuration;
+            transform.localScale = Vector3.Lerp(initialScale, initialScale * shotPulseAmount, t);
+            yield return null;
+        }
+
+        elapsed = 0f;
+        while (elapsed < halfDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / halfDuration;
+            transform.localScale = Vector3.Lerp(initialScale * shotPulseAmount, initialScale, t);
+            yield return null;
+        }
+
+        transform.localScale = initialScale;
+    }
+
+    float GetSpeedMultiplier()
+    {
+        float damageFactor = (maxHp - currentHp);
+        return 1f + (damageFactor * 1.5f);
     }
 
     IEnumerator ExplodeSequence()
@@ -162,9 +188,8 @@ public class BombController : MonoBehaviour
         bombCollider.enabled = false; 
         
         if (GameManager.Instance != null) GameManager.Instance.AddBombTriggered();
-
-        // Ensure we start fading from the current color state
-        if (spriteRenderer != null) spriteRenderer.color = originalSpriteColor;
+        
+        if (spriteRenderer != null) spriteRenderer.color = swellColor;
 
         if (audioSource != null && explodeSound != null)
         {
@@ -175,7 +200,7 @@ public class BombController : MonoBehaviour
         PaintExplosionArea();
 
         float elapsed = 0f;
-        Color startColor = spriteRenderer.color;
+        Color startColor = swellColor; 
         Vector3 startScale = transform.localScale;
 
         while (elapsed < expansionDuration)
@@ -198,7 +223,6 @@ public class BombController : MonoBehaviour
     void PaintExplosionArea()
     {
         if (turfManager == null) return;
-
         Vector3Int centerCell = turfManager.turfTilemap.WorldToCell(transform.position);
 
         for (int x = -explosionRadius; x <= explosionRadius; x++)
@@ -208,9 +232,50 @@ public class BombController : MonoBehaviour
                 if (Vector2.Distance(new Vector2(x, y), Vector2.zero) <= explosionRadius)
                 {
                     Vector3Int targetPos = centerCell + new Vector3Int(x, y, 0);
-                    turfManager.RegisterTile(targetPos, false);
+                    turfManager.RegisterTile(targetPos, true);
                 }
             }
         }
+    }
+
+    IEnumerator FizzleSequence()
+    {
+        float elapsed = 0f;
+        while (elapsed < lifetime)
+        {
+            if (isExploding) yield break; 
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        StartCoroutine(SafeDespawn());
+    }
+
+    IEnumerator SafeDespawn()
+    {
+        isExploding = true;
+        bombCollider.enabled = false;
+        float duration = 0.5f;
+        float t = 0f;
+        Vector3 startScale = transform.localScale;
+
+        while(t < 1f)
+        {
+            t += Time.deltaTime / duration;
+            transform.localScale = Vector3.Lerp(startScale, Vector3.zero, t);
+            if(spriteRenderer != null) 
+            {
+                Color c = spriteRenderer.color;
+                c.a = Mathf.Lerp(1f, 0f, t);
+                spriteRenderer.color = c;
+            }
+            yield return null;
+        }
+        Destroy(gameObject);
+    }
+
+    private void OnCollisionEnter2D(Collision2D other)
+    {
+        if (isExploding) return;
+        if (other.gameObject.CompareTag("PlayerBullet")) TakeDamage(1f);
     }
 }

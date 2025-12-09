@@ -409,7 +409,7 @@ NavMeshAgent:
   m_Enabled: 1
   m_AgentTypeID: 0
   m_Radius: 0.5
-  m_Speed: 3.24
+  m_Speed: 2.5
   m_Acceleration: 5
   avoidancePriority: 50
   m_AngularSpeed: 120
@@ -443,7 +443,7 @@ MonoBehaviour:
   baseSpeed: 3.5
   colorVariance: 0.05
   growthDuration: 0.5
-  maxHealth: 3
+  maxHealth: 4
   healthRegenRate: 0.5
   damageFadeColor: {r: 0.5, g: 0, b: 0.5, a: 1}
   deathPaintColor: {r: 0.2509804, g: 0.7294118, b: 1, a: 1}
@@ -465,10 +465,10 @@ MonoBehaviour:
   sfxVolume: 1
   bombPrefab: {fileID: 1625205309530751804, guid: 3605bd828f6115449a938200a381176a, type: 3}
   minBombInterval: 10
-  maxBombInterval: 120
+  maxBombInterval: 60
   projectilePrefab: {fileID: 7049424773339979823, guid: bcfa19e077fc99d45801288df0b746f5, type: 3}
-  fireRate: 2
-  bulletSpeed: 8
+  fireRate: 6
+  bulletSpeed: 10
 --- !u!50 &32429220687462609
 Rigidbody2D:
   serializedVersion: 5

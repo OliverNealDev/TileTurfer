@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEngine.UI;
@@ -88,7 +89,6 @@ public class TurfManager : MonoBehaviour
             if (turfTilemap.HasTile(pos))
             {
                 totalTiles++;
-                
                 turfTilemap.SetTileFlags(pos, TileFlags.None);
 
                 if (startOwnedByEnemies)
@@ -104,7 +104,6 @@ public class TurfManager : MonoBehaviour
                 }
             }
         }
-        
         UpdateSlider();
     }
 
@@ -120,30 +119,18 @@ public class TurfManager : MonoBehaviour
         if (isPlayer)
         {
             ownedTiles++;
-            pointSoundQueue++; // Only play sound for player
-            
+            pointSoundQueue++; 
             if (GameManager.Instance != null) GameManager.Instance.AddTilePainted();
-            
-            if (IsColorSimilar(currentColor, enemyColor))
-            {
-                enemyTiles--;
-            }
+            if (IsColorSimilar(currentColor, enemyColor)) enemyTiles--;
         }
         else
         {
             enemyTiles++;
-
-            if (IsColorSimilar(currentColor, playerColor))
-            {
-                ownedTiles--;
-            }
+            if (IsColorSimilar(currentColor, playerColor)) ownedTiles--;
         }
 
-        // MOVED HERE: Spawns the effect for BOTH Player and Enemy
         SpawnPopEffect(cellPos, targetColor);
-
         turfTilemap.SetColor(cellPos, targetColor);
-        
         UpdateSlider();
     }
 
@@ -153,7 +140,6 @@ public class TurfManager : MonoBehaviour
         if (tileSprite == null) return;
 
         Vector3 worldPos = turfTilemap.GetCellCenterWorld(cellPos);
-
         GameObject popObj = new GameObject("TilePopFX");
         popObj.transform.position = worldPos;
 
@@ -180,7 +166,6 @@ public class TurfManager : MonoBehaviour
         {
             elapsed += Time.deltaTime;
             float t = elapsed / popDuration;
-            
             float curve = Mathf.Sin(t * Mathf.PI);
             
             if (objTransform != null)
@@ -189,16 +174,12 @@ public class TurfManager : MonoBehaviour
             yield return null;
         }
 
-        if (objTransform != null)
-            Destroy(objTransform.gameObject);
+        if (objTransform != null) Destroy(objTransform.gameObject);
     }
 
     void UpdateSlider()
     {
-        if (turfSlider != null)
-        {
-            turfSlider.value = GetTurfPercentage();
-        }
+        if (turfSlider != null) turfSlider.value = GetTurfPercentage();
     }
 
     public float GetTurfPercentage()
@@ -207,11 +188,67 @@ public class TurfManager : MonoBehaviour
         return (float)ownedTiles / (float)totalTiles;
     }
 
-    bool IsColorSimilar(Color a, Color b)
+    public bool IsColorSimilar(Color a, Color b)
     {
         float tolerance = 0.01f;
         return Mathf.Abs(a.r - b.r) < tolerance &&
                Mathf.Abs(a.g - b.g) < tolerance &&
                Mathf.Abs(a.b - b.b) < tolerance;
+    }
+
+    // --- SPAWN LOGIC ---
+    public Vector3? GetRandomEnemySpawnPoint(Vector3 playerPos, float safetyRadius = 8f)
+    {
+        List<Vector3Int> enemyPositions = new List<Vector3Int>();
+        List<Vector3Int> fallbackPositions = new List<Vector3Int>();
+        
+        // Only allow fallback spawning if the game just started
+        bool allowAnyTile = Time.timeSinceLevelLoad < 1.0f;
+
+        foreach (var pos in turfTilemap.cellBounds.allPositionsWithin)
+        {
+            if (turfTilemap.HasTile(pos))
+            {
+                // 1. Gather Enemy Tiles
+                if (IsColorSimilar(turfTilemap.GetColor(pos), enemyColor))
+                {
+                    enemyPositions.Add(pos);
+                }
+
+                // 2. Gather All Tiles (Only if it's the start of the game)
+                if (allowAnyTile)
+                {
+                    fallbackPositions.Add(pos);
+                }
+            }
+        }
+
+        // OPTION A: Spawn on Enemy Turf (Priority)
+        if (enemyPositions.Count > 0)
+        {
+            Vector3Int randomCell = enemyPositions[Random.Range(0, enemyPositions.Count)];
+            return turfTilemap.GetCellCenterWorld(randomCell);
+        }
+        
+        // OPTION B: Fallback (Only < 1 second)
+        if (allowAnyTile && fallbackPositions.Count > 0)
+        {
+            // Try to find a safe spot away from player
+            for (int i = 0; i < 10; i++)
+            {
+                Vector3Int randomCell = fallbackPositions[Random.Range(0, fallbackPositions.Count)];
+                Vector3 worldPos = turfTilemap.GetCellCenterWorld(randomCell);
+
+                if (Vector3.Distance(worldPos, playerPos) > safetyRadius)
+                {
+                    return worldPos;
+                }
+            }
+            // If safety check fails 10 times, spawn anyway
+            return turfTilemap.GetCellCenterWorld(fallbackPositions[Random.Range(0, fallbackPositions.Count)]);
+        }
+
+        // If game > 1s and no enemy tiles left, return null (Stop spawning)
+        return null;
     }
 }

@@ -1,80 +1,80 @@
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Tilemaps;
 
 public class EnemyManager : MonoBehaviour
 {
-    [Header("Spawning Settings")]
-    [SerializeField] private int initialEnemyCount = 0;
-    [SerializeField] private float spawnInterval = 5f;
-    private float timeSinceLastSpawn = 0f;
-    [SerializeField] private int maxEnemyCount = 20;
-    
+    [Header("References")]
+    [SerializeField] private TurfManager turfManager;
     [SerializeField] private GameObject enemyPrefab;
 
-    [Header("Turf Settings")]
-    [SerializeField] private Tilemap turfTilemap; 
-    [SerializeField] private Color enemyTurfColor = Color.white; 
+    [Header("Difficulty Scaling")]
+    [Tooltip("Enemies allowed when you have 0% Turf")]
+    [SerializeField] private int minEnemies = 3;
+    [Tooltip("Enemies allowed when you have 100% Turf")]
+    [SerializeField] private int maxEnemies = 40; 
+
+    [Tooltip("Time between spawns at 0% Turf (Slow)")]
+    [SerializeField] private float slowSpawnRate = 4.0f;
+    [Tooltip("Time between spawns at 100% Turf (Fast)")]
+    [SerializeField] private float fastSpawnRate = 0.5f;
+
+    private float timeSinceLastSpawn = 0f;
+    private Transform playerTransform;
 
     void Start()
     {
-        for(int i = 0; i < initialEnemyCount; i++)
+        if (turfManager == null) turfManager = FindFirstObjectByType<TurfManager>();
+        
+        // Find Player for safety checks
+        GameObject p = GameObject.FindGameObjectWithTag("Player");
+        if (p != null) playerTransform = p.transform;
+
+        // Spawn a few to start
+        for(int i = 0; i < minEnemies; i++)
         {
-            SpawnEnemy(true);
+            SpawnEnemy();
         }
     }
     
     void Update()
     {
-        timeSinceLastSpawn += Time.deltaTime;
-        if (timeSinceLastSpawn >= spawnInterval)
+        HandleSpawning();
+    }
+    
+    void HandleSpawning()
+    {
+        float progress = 0f;
+        if (turfManager != null) progress = turfManager.GetTurfPercentage();
+
+        int currentCap = Mathf.RoundToInt(Mathf.Lerp(minEnemies, maxEnemies, progress));
+        float currentRate = Mathf.Lerp(slowSpawnRate, fastSpawnRate, progress);
+
+        int activeEnemies = GameObject.FindGameObjectsWithTag("Enemy").Length;
+
+        if (activeEnemies < currentCap)
         {
-            SpawnEnemy(false);
-            timeSinceLastSpawn = 0f;
+            timeSinceLastSpawn += Time.deltaTime;
+            
+            if (timeSinceLastSpawn >= currentRate)
+            {
+                SpawnEnemy();
+                timeSinceLastSpawn = 0f;
+            }
         }
     }
     
-    void SpawnEnemy(bool spawnAnywhere)
+    void SpawnEnemy()
     {
-        if (enemyPrefab == null || turfTilemap == null) return;
+        if (enemyPrefab == null || turfManager == null) return;
 
-        List<Vector3> validSpawnPoints = GetValidSpawnPoints(spawnAnywhere);
+        Vector3 pPos = Vector3.zero;
+        if (playerTransform != null) pPos = playerTransform.position;
 
-        if (validSpawnPoints.Count > 0 && GameObject.FindGameObjectsWithTag("Enemy").Length < maxEnemyCount)
+        // Ask TurfManager for a valid spot, passing player pos for safety
+        Vector3? spawnPos = turfManager.GetRandomEnemySpawnPoint(pPos, 8f);
+
+        if (spawnPos.HasValue)
         {
-            int randomIndex = Random.Range(0, validSpawnPoints.Count);
-            Vector3 spawnPosition = validSpawnPoints[randomIndex];
-            
-            Instantiate(enemyPrefab, spawnPosition, Quaternion.identity);
+            Instantiate(enemyPrefab, spawnPos.Value, Quaternion.identity);
         }
-    }
-
-    List<Vector3> GetValidSpawnPoints(bool spawnAnywhere)
-    {
-        List<Vector3> points = new List<Vector3>();
-        
-        turfTilemap.CompressBounds();
-
-        foreach (var pos in turfTilemap.cellBounds.allPositionsWithin)
-        {
-            if (!turfTilemap.HasTile(pos)) continue;
-
-            if (spawnAnywhere)
-            {
-                points.Add(turfTilemap.GetCellCenterWorld(pos));
-            }
-            else
-            {
-                Color tileColor = turfTilemap.GetColor(pos);
-
-                if (tileColor == enemyTurfColor)
-                {
-                    Vector3 worldPos = turfTilemap.GetCellCenterWorld(pos);
-                    points.Add(worldPos);
-                }
-            }
-        }
-
-        return points;
     }
 }

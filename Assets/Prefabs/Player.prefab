@@ -431,7 +431,11 @@ MonoBehaviour:
   speed: 5
   MultiplierText: {fileID: 0}
   projectilePrefab: {fileID: 7049424773339979823, guid: bcfa19e077fc99d45801288df0b746f5, type: 3}
+  paintBulletPrefab: {fileID: 0}
   projectileSpeed: 8
+  milestone1: 0.25
+  milestone2: 0.5
+  milestone3: 0.75
   maxHealth: 10
   healthRegenRate: 1
   hurtSound: {fileID: 8300000, guid: 6952008002402a9478a6a9f09444a838, type: 3}
@@ -441,10 +445,11 @@ MonoBehaviour:
   explosionDuration: 0.5
   explosionPopScale: 2
   slowFireRate: 0.25
-  fastFireRate: 0.1
+  fastFireRate: 0.0001
   turfManager: {fileID: 0}
   turfTilemap: {fileID: 0}
   paintSensitivity: 0.5
+  autoRotateSpeed: 177.5
   shootSound: {fileID: 8300000, guid: 6961ad4f959b51c4d8868ef0d3803156, type: 3}
 --- !u!82 &511433945978486716
 AudioSource:

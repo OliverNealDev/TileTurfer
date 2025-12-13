@@ -448,7 +448,7 @@ MonoBehaviour:
   fastFireRate: 0.0001
   turfManager: {fileID: 0}
   turfTilemap: {fileID: 0}
-  paintSensitivity: 0.5
+  paintSensitivity: 0.75
   autoRotateSpeed: 177.5
   shootSound: {fileID: 8300000, guid: 6961ad4f959b51c4d8868ef0d3803156, type: 3}
 --- !u!82 &511433945978486716

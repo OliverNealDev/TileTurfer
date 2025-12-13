@@ -12,14 +12,37 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private GameObject playerObj;
     
     [Header("Debug")]
-    [SerializeField] private bool enableDebugLogs = true; // TOGGLE THIS OFF to stop console spam
+    [SerializeField] private bool enableDebugLogs = true;
 
     [Header("Turf Settings")]
     [SerializeField] private TurfManager turfManager;
     [SerializeField] private Tilemap turfTilemap;
     [SerializeField] private Color enemyColor;
+    [Range(0f, 1f)] [SerializeField] private float paintSensitivity = 0.5f;
     private bool isGrowing = true; 
     
+    [Header("NavMesh Agent Settings")]
+    [SerializeField] private float agentAcceleration = 60f;
+    [SerializeField] private float agentAngularSpeed = 360f;
+    [Tooltip("How far to search for a valid NavMesh point if the target is off-mesh")]
+    [SerializeField] private float navMeshSampleRadius = 3.0f;
+
+    [Header("Pathfinding Logic")]
+    [Tooltip("How often (in seconds) to calculate a new random path. Higher = better performance.")]
+    [SerializeField] private float pathCalculationCooldown = 0.2f;
+    [Tooltip("Radius in grid cells to scan for tiles")]
+    [SerializeField] private int tileScanRadius = 15;
+    [Tooltip("Minimum distance a new destination must be from the current position")]
+    [SerializeField] private float minMoveDistance = 4.0f;
+
+    [Header("Tile Scoring Weights")]
+    [Tooltip("Base score for White (Neutral) tiles")]
+    [SerializeField] private float whiteTileWeight = 10f;
+    [Tooltip("Base score for Blue (Player) tiles. Higher means they prefer attacking your turf.")]
+    [SerializeField] private float blueTileWeight = 100f;
+    [Tooltip("Randomness added to score to prevent enemies bunching up")]
+    [SerializeField] private float randomScoreNoise = 50f;
+
     [Header("Variation Settings")]
     [SerializeField] private float minSizeMult = 0.85f;
     [SerializeField] private float maxSizeMult = 1.15f;
@@ -48,15 +71,12 @@ public class EnemyController : MonoBehaviour
     private float currentHealth;
     private bool isDead = false;
 
-    // --- AI SENSES ---
     [Header("AI & Senses")]
     [SerializeField] private float visionRange = 7f; 
     [SerializeField] private float chasePersistenceDuration = 3f;
-    [Tooltip("Select 'Default' (Walls) and 'Player'. Do NOT select 'Enemy'.")]
     [SerializeField] private LayerMask obstacleMask; 
     private float lastSawPlayerTime = -10f; 
 
-    // State tracking for logs to prevent spamming the same log every frame
     private enum AIState { Spawning, Roaming, ChasingMemory, ChasingVisible }
     private AIState currentState = AIState.Spawning;
 
@@ -88,7 +108,7 @@ public class EnemyController : MonoBehaviour
     private float fireInterval;
     private float fireTimer;
 
-    private Vector2 randomNearbyPoint;
+    private float pathCalculationTimer = 0f;
     
     void Awake()
     {
@@ -99,6 +119,11 @@ public class EnemyController : MonoBehaviour
 
         agent.updateRotation = false;
         agent.updateUpAxis = false;
+        
+        // Use exposed variables
+        agent.acceleration = agentAcceleration; 
+        agent.angularSpeed = agentAngularSpeed; 
+        agent.autoBraking = false; 
 
         var pos = transform.position;
         transform.position = new Vector3(pos.x, pos.y, 0f);
@@ -114,7 +139,12 @@ public class EnemyController : MonoBehaviour
 
     void Start()
     {
-        if (!agent.isOnNavMesh) Debug.LogError($"[Enemy {gameObject.name}] NOT on NavMesh!");
+        if (!agent.isOnNavMesh) 
+        {
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(transform.position, out hit, navMeshSampleRadius, NavMesh.AllAreas))
+                agent.Warp(hit.position);
+        }
 
         float sizeMultiplier = UnityEngine.Random.Range(minSizeMult, maxSizeMult);
         targetScale = new Vector3(sizeMultiplier, sizeMultiplier, 1f);
@@ -131,13 +161,9 @@ public class EnemyController : MonoBehaviour
             enemyColor.a
         );
 
-        Vector2 randomDirection = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(2f, 5f);
-        randomNearbyPoint = (Vector2)transform.position + randomDirection;
-
         currentBombInterval = UnityEngine.Random.Range(minBombInterval, maxBombInterval);
 
         if (neutralSprite != null) spriteRenderer.sprite = neutralSprite;
-        
         spriteRenderer.color = specificEnemyColor;
     }
 
@@ -162,7 +188,7 @@ public class EnemyController : MonoBehaviour
             {
                 isGrowing = false;
                 transform.localScale = targetScale;
-                currentState = AIState.Roaming; // Ready to start AI
+                currentState = AIState.Roaming; 
             }
         }
         else
@@ -190,26 +216,14 @@ public class EnemyController : MonoBehaviour
         if (canSeePlayer)
         {
             lastSawPlayerTime = Time.time;
-            
-            // Log state change
-            if (currentState != AIState.ChasingVisible)
-            {
-                if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] ACQUIRED TARGET: Player Visible!");
-                currentState = AIState.ChasingVisible;
-            }
+            currentState = AIState.ChasingVisible;
         }
 
         bool shouldChase = Time.time - lastSawPlayerTime < chasePersistenceDuration;
 
         if (shouldChase)
         {
-            // Log state change (Memory)
-            if (!canSeePlayer && currentState != AIState.ChasingMemory)
-            {
-                if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] LOST VISUAL: Chasing Memory...");
-                currentState = AIState.ChasingMemory;
-            }
-
+            if (!canSeePlayer) currentState = AIState.ChasingMemory;
             agent.SetDestination(playerObj.transform.position);
             
             if (angrySprite != null) spriteRenderer.sprite = angrySprite;
@@ -219,21 +233,11 @@ public class EnemyController : MonoBehaviour
             Quaternion targetRotation = Quaternion.AngleAxis(angle, Vector3.forward);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * rotationSpeed);
 
-            // Only shoot if we can ACTUALLY see them
-            if (canSeePlayer)
-            {
-                HandleShooting();
-            }
+            if (canSeePlayer) HandleShooting();
         }
         else
         {
-            // Log state change
-            if (currentState != AIState.Roaming)
-            {
-                if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] GAVE UP: Roaming.");
-                currentState = AIState.Roaming;
-            }
-
+            currentState = AIState.Roaming;
             if (neutralSprite != null) spriteRenderer.sprite = neutralSprite;
 
             if (agent.velocity.sqrMagnitude > 0.1f)
@@ -243,9 +247,17 @@ public class EnemyController : MonoBehaviour
                 transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * (rotationSpeed * 0.5f));
             }
 
-            if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
+            // Path Calculation Cooldown
+            pathCalculationTimer -= Time.deltaTime;
+            
+            if (pathCalculationTimer <= 0f)
             {
-                SetNewRandomDestination();
+                // If stopped or stuck, find new path
+                if (!agent.hasPath || agent.remainingDistance <= 0.5f)
+                {
+                    SetNewRandomDestination();
+                    pathCalculationTimer = pathCalculationCooldown; 
+                }
             }
         }
     }
@@ -253,38 +265,110 @@ public class EnemyController : MonoBehaviour
     bool CheckLineOfSight()
     {
         if (playerObj == null) return false;
-
         float distance = Vector2.Distance(transform.position, playerObj.transform.position);
-        
         if (distance > visionRange) return false;
 
         Vector3 direction = (playerObj.transform.position - transform.position).normalized;
-        
-        // VISUAL DEBUG: Draw a Yellow line to show where the enemy is looking
-        if (enableDebugLogs) Debug.DrawRay(transform.position, direction * visionRange, Color.yellow);
-
-        // Perform Raycast
         RaycastHit2D hit = Physics2D.Raycast(transform.position, direction, visionRange, obstacleMask);
 
-        if (hit.collider != null)
+        if (hit.collider != null && hit.collider.CompareTag("Player"))
         {
-            if (hit.collider.CompareTag("Player"))
+            return true;
+        }
+        return false;
+    }
+
+    void SetNewRandomDestination()
+    {
+        Vector3? bestTilePos = FindBestTileDestination();
+
+        if (bestTilePos.HasValue)
+        {
+            agent.SetDestination(bestTilePos.Value);
+            if (enableDebugLogs) Debug.DrawLine(transform.position, bestTilePos.Value, Color.green, 1.0f);
+        }
+        else
+        {
+            // Fallback roam
+            Vector2 randomDir = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(5f, 10f);
+            Vector3 targetPos = transform.position + new Vector3(randomDir.x, randomDir.y, 0);
+            
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(targetPos, out hit, navMeshSampleRadius, NavMesh.AllAreas)) 
             {
-                if (enableDebugLogs) Debug.DrawLine(transform.position, hit.point, Color.green);
-                return true;
+                agent.SetDestination(hit.position);
+                if (enableDebugLogs) Debug.DrawLine(transform.position, hit.position, Color.red, 1.0f);
             }
-            else
+        }
+    }
+
+    Vector3? FindBestTileDestination()
+    {
+        if (turfTilemap == null || turfManager == null) return null;
+
+        Vector3Int currentCell = turfTilemap.WorldToCell(transform.position);
+        
+        Vector3Int bestCell = Vector3Int.zero;
+        float bestScore = -1f;
+        bool foundAny = false;
+
+        // Use exposed ScanRadius
+        for (int x = -tileScanRadius; x <= tileScanRadius; x++)
+        {
+            for (int y = -tileScanRadius; y <= tileScanRadius; y++)
             {
-                // DIAGNOSTIC LOG: This will tell you exactly what is blocking the view
-                if (enableDebugLogs) 
+                Vector3Int checkPos = currentCell + new Vector3Int(x, y, 0);
+                
+                if (!turfTilemap.HasTile(checkPos)) continue;
+
+                Vector3 worldPos = turfTilemap.GetCellCenterWorld(checkPos);
+                float distance = Vector3.Distance(transform.position, worldPos);
+
+                // Use exposed MinMoveDistance
+                if (distance < minMoveDistance) continue;
+
+                Color tileColor = turfTilemap.GetColor(checkPos);
+                bool isEnemyColor = turfManager.IsColorSimilar(tileColor, turfManager.enemyColor);
+                if (isEnemyColor) continue; 
+
+                bool isPlayerColor = turfManager.IsColorSimilar(tileColor, turfManager.playerColor);
+                
+                float score = 0f;
+
+                // Use exposed Weights
+                if (isPlayerColor) 
                 {
-                    Debug.Log($"[Enemy Vision] Blocked by: '{hit.collider.name}' on Layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}");
-                    Debug.DrawLine(transform.position, hit.point, Color.red);
+                    score = blueTileWeight;
+                }
+                else 
+                {
+                    score = whiteTileWeight;
+                }
+
+                // Use exposed Noise
+                score += UnityEngine.Random.Range(0f, randomScoreNoise);
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestCell = checkPos;
+                    foundAny = true;
                 }
             }
         }
 
-        return false;
+        if (foundAny)
+        {
+            Vector3 worldTarget = turfTilemap.GetCellCenterWorld(bestCell);
+            NavMeshHit hit;
+            // Use exposed SampleRadius
+            if (NavMesh.SamplePosition(worldTarget, out hit, navMeshSampleRadius, NavMesh.AllAreas))
+            {
+                return hit.position;
+            }
+        }
+
+        return null;
     }
 
     void UpdateColorBasedOnHealth()
@@ -304,7 +388,6 @@ public class EnemyController : MonoBehaviour
     void HandleShooting()
     {
         fireTimer += Time.deltaTime;
-
         if (fireTimer >= fireInterval)
         {
             ShootAtPlayer();
@@ -315,26 +398,13 @@ public class EnemyController : MonoBehaviour
     void ShootAtPlayer()
     {
         if (projectilePrefab == null || playerObj == null) return;
-
-        if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] Fired Shot!");
-
         Vector3 direction = (playerObj.transform.position - transform.position).normalized;
         float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
         Quaternion rotation = Quaternion.AngleAxis(angle, Vector3.forward);
-
         GameObject bullet = Instantiate(projectilePrefab, transform.position, rotation);
-
         bulletController bc = bullet.GetComponent<bulletController>();
-        if (bc != null)
-        {
-            bc.Initialise(false, bulletSpeed, 2f, 1f, 0f, enemyCollider);
-        }
-
-        if (audioSource != null && shootSound != null)
-        {
-            audioSource.pitch = UnityEngine.Random.Range(0.9f, 1.1f);
-            audioSource.PlayOneShot(shootSound, sfxVolume * 0.5f); 
-        }
+        if (bc != null) bc.Initialise(false, bulletSpeed, 2f, 1f, 0f, enemyCollider);
+        if (audioSource != null && shootSound != null) audioSource.PlayOneShot(shootSound, sfxVolume * 0.5f); 
     }
 
     void HandleBombSpawning()
@@ -351,26 +421,18 @@ public class EnemyController : MonoBehaviour
 
     void SpawnBomb() 
     { 
-        if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] Dropped Bomb.");
         Instantiate(bombPrefab, transform.position, Quaternion.identity); 
     }
 
-    void SetNewRandomDestination()
-    {
-        Vector2 randomDir = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(4f, 12f);
-        Vector3 targetPos = transform.position + new Vector3(randomDir.x, randomDir.y, 0);
-        NavMeshHit hit;
-        if (NavMesh.SamplePosition(targetPos, out hit, 2.0f, NavMesh.AllAreas)) agent.SetDestination(hit.position);
-    }
-
-    // --- PAINT LOGIC (Inner Half) ---
     void PaintTurfUnderEnemy()
     {
         if (turfTilemap == null || turfManager == null || enemyCollider == null) return;
-
+        
         Bounds bounds = enemyCollider.bounds;
         Vector3 center = bounds.center;
-        Vector3 innerExtents = bounds.extents * 0.5f;
+        
+        // Use exposed PaintSensitivity
+        Vector3 innerExtents = bounds.extents * paintSensitivity;
         Vector3 minPos = center - innerExtents;
         Vector3 maxPos = center + innerExtents;
 
@@ -389,56 +451,25 @@ public class EnemyController : MonoBehaviour
     private void OnCollisionEnter2D(Collision2D other)
     {
         if (isDead) return;
-
         if (other.gameObject.CompareTag("PlayerBullet"))
         {
-            if (audioSource != null && hitSound != null)
-            {
-                audioSource.pitch = UnityEngine.Random.Range(0.9f, 1.1f);
-                audioSource.PlayOneShot(hitSound, sfxVolume);
-            }
-
+            if (audioSource != null && hitSound != null) audioSource.PlayOneShot(hitSound, sfxVolume);
             currentHealth -= 1f;
-            
-            if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] Hit! HP Remaining: {currentHealth}");
-
             UpdateColorBasedOnHealth();
             UpdateInflationBasedOnHealth();
-
-            if (currentHealth <= 0)
-            {
-                StartCoroutine(ExplosionRoutine());
-            }
+            if (currentHealth <= 0) StartCoroutine(ExplosionRoutine());
         }
-    }
-
-    void PlayDeathSound()
-    {
-        if (deathSound == null) return;
-
-        GameObject soundObj = new GameObject("TempDeathSound");
-        soundObj.transform.position = transform.position;
-        
-        AudioSource src = soundObj.AddComponent<AudioSource>();
-        src.clip = deathSound;
-        src.volume = sfxVolume;
-        src.spatialBlend = 0f; 
-        
-        src.Play();
-        Destroy(soundObj, deathSound.length + 0.1f);
     }
 
     IEnumerator ExplosionRoutine()
     {
-        if (enableDebugLogs) Debug.Log($"[Enemy {gameObject.name}] Exploding!");
         isDead = true;
-        
         if (enemyCollider != null) enemyCollider.enabled = false;
         if (agent != null) agent.enabled = false;
-
         if (GameManager.Instance != null) GameManager.Instance.AddKill();
-                
-        PlayDeathSound();
+        
+        if (deathSound != null) AudioSource.PlayClipAtPoint(deathSound, transform.position, sfxVolume);
+
         PaintExplosionArea();
 
         float elapsed = 0f;
@@ -450,16 +481,12 @@ public class EnemyController : MonoBehaviour
         {
             elapsed += Time.deltaTime;
             float t = elapsed / explosionDuration;
-
             transform.localScale = Vector3.Lerp(startScale, endScale, t);
-            
             Color newColor = startColor;
             newColor.a = Mathf.Lerp(1f, 0f, t);
             spriteRenderer.color = newColor;
-
             yield return null;
         }
-
         Destroy(gameObject);
     }
 
@@ -468,7 +495,6 @@ public class EnemyController : MonoBehaviour
         if (turfManager != null && turfTilemap != null)
         {
             Vector3Int centerCell = turfTilemap.WorldToCell(transform.position);
-
             for (int x = -deathExplosionRadius; x <= deathExplosionRadius; x++)
             {
                 for (int y = -deathExplosionRadius; y <= deathExplosionRadius; y++)

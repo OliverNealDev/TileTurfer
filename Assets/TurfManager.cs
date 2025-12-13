@@ -35,6 +35,9 @@ public class TurfManager : MonoBehaviour
     private AudioSource audioSource;
     private int pointSoundQueue = 0;
     private float pointSoundTimer = 0f;
+    
+    [Header("Minimap")]
+    [SerializeField] private MinimapSync minimapSync; // Drag the script here in Inspector
 
     void Awake()
     {
@@ -77,7 +80,7 @@ public class TurfManager : MonoBehaviour
         }
     }
 
-    void RecalculateTotalTiles()
+    public void RecalculateTotalTiles()
     {
         turfTilemap.CompressBounds();
         totalTiles = 0;
@@ -131,6 +134,9 @@ public class TurfManager : MonoBehaviour
 
         SpawnPopEffect(cellPos, targetColor);
         turfTilemap.SetColor(cellPos, targetColor);
+        
+        if (minimapSync != null) minimapSync.UpdateMinimapTile(cellPos, targetColor);
+        
         UpdateSlider();
     }
 

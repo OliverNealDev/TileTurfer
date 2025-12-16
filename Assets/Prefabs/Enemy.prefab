@@ -393,11 +393,12 @@ MonoBehaviour:
   turfTilemap: {fileID: 0}
   enemyColor: {r: 1, g: 0.25882354, b: 0.25882354, a: 1}
   paintSensitivity: 0.75
+  spawnClusterSize: 80
   agentAcceleration: 30
   agentAngularSpeed: 120
   navMeshSampleRadius: 4
   pathCalculationCooldown: 0.2
-  tileScanRadius: 60
+  tileScanRadius: 15
   minMoveDistance: 5
   whiteTileWeight: 90
   blueTileWeight: 100
@@ -415,7 +416,7 @@ MonoBehaviour:
   explosionDuration: 0.15
   explosionPopScale: 2.5
   deathExplosionRadius: 2
-  visionRange: 5
+  visionRange: 8
   chasePersistenceDuration: 3
   obstacleMask:
     serializedVersion: 2
@@ -431,8 +432,13 @@ MonoBehaviour:
   minBombInterval: 10
   maxBombInterval: 60
   projectilePrefab: {fileID: 7049424773339979823, guid: bcfa19e077fc99d45801288df0b746f5, type: 3}
-  fireRate: 6
+  slowFireRate: 0.33333334
+  fastFireRate: 0.111111134
   bulletSpeed: 10
+  burstDelay: 0.05
+  milestone1: 0.25
+  milestone2: 0.5
+  milestone3: 0.75
 --- !u!50 &32429220687462609
 Rigidbody2D:
   serializedVersion: 5

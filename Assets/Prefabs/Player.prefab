@@ -436,6 +436,7 @@ MonoBehaviour:
   milestone1: 0.25
   milestone2: 0.5
   milestone3: 0.75
+  burstDelay: 0.1
   maxHealth: 10
   healthRegenRate: 1
   hurtSound: {fileID: 8300000, guid: 6952008002402a9478a6a9f09444a838, type: 3}
@@ -445,7 +446,7 @@ MonoBehaviour:
   explosionDuration: 0.5
   explosionPopScale: 2
   slowFireRate: 0.25
-  fastFireRate: 0.0001
+  fastFireRate: 0.08333334
   turfManager: {fileID: 0}
   turfTilemap: {fileID: 0}
   paintSensitivity: 0.75

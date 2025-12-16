@@ -52,10 +52,8 @@ public class TurfManager : MonoBehaviour
 
     void Start()
     {
-        // 1. Calculate map size
         RecalculateTotalTiles();
 
-        // 2. Generate the random Red Blob at the start only
         if (!startOwnedByEnemies && generateFoothold)
         {
             CreateInitialFoothold();
@@ -67,7 +65,6 @@ public class TurfManager : MonoBehaviour
         ProcessPointSoundQueue();
     }
 
-    // --- CLUSTER GENERATOR (Runs Once at Start) ---
     void CreateInitialFoothold()
     {
         List<Vector3Int> allFloors = new List<Vector3Int>();
@@ -78,7 +75,6 @@ public class TurfManager : MonoBehaviour
 
         if (allFloors.Count == 0) return;
 
-        // Pick random spot (Try to avoid center 0,0 where player is)
         Vector3Int startNode = allFloors[Random.Range(0, allFloors.Count)];
         int attempts = 0;
         while (Vector3.Distance(turfTilemap.GetCellCenterWorld(startNode), Vector3.zero) < 10f && attempts < 50)
@@ -87,7 +83,6 @@ public class TurfManager : MonoBehaviour
             attempts++;
         }
         
-        // Grow the blob
         Queue<Vector3Int> frontier = new Queue<Vector3Int>();
         HashSet<Vector3Int> paintedSet = new HashSet<Vector3Int>();
         
@@ -116,7 +111,6 @@ public class TurfManager : MonoBehaviour
             {
                 if (turfTilemap.HasTile(n) && !paintedSet.Contains(n))
                 {
-                    // Random chance to create organic shape
                     if (Random.value > 0.2f) 
                     {
                         paintedSet.Add(n);
@@ -127,7 +121,6 @@ public class TurfManager : MonoBehaviour
         }
         UpdateSlider();
     }
-    // ----------------------------------------------
 
     void ProcessPointSoundQueue()
     {

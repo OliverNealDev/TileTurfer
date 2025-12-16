@@ -170,18 +170,13 @@ public class PlayerController : MonoBehaviour
             timeSinceShot = 0f;
         }
     }
-
-    // --- BURST COROUTINES ---
-
+    
     IEnumerator FirePatternTriangle(bool isPaint)
     {
-        // 1. Center Shot
         if (isPaint) ShootPaint(0f, 0f); else ShootNormal(0f, 0f);
 
-        // Wait...
         yield return new WaitForSeconds(burstDelay);
 
-        // 2. Side Shots
         if (isPaint)
         {
             ShootPaint(-5f, -0.3f);
@@ -227,9 +222,7 @@ public class PlayerController : MonoBehaviour
             ShootNormal(10f, 0.4f);
         }
     }
-
-    // --- SHOOTING HELPERS ---
-
+    
     void ShootNormal(float angleOffset, float sideOffset)
     {
         Vector3 spawnPos = transform.position + (transform.right * 0.5f) + (transform.up * sideOffset);
@@ -269,9 +262,7 @@ public class PlayerController : MonoBehaviour
             audioSource.PlayOneShot(shootSound);
         }
     }
-
-    // --- BOILERPLATE BELOW ---
-
+    
     void PaintTurfUnderPlayer()
     {
         if (turfTilemap == null || turfManager == null || playerCollider == null) return;

@@ -10,7 +10,7 @@ public class PaintBullet : MonoBehaviour
     [SerializeField] private float checkGracePeriod = 0.1f; 
     
     [Header("Impact")]
-    [SerializeField] private float knockbackForce = 5f; // New Knockback Variable
+    [SerializeField] private float knockbackForce = 5f;
     
     [Header("Multi-Paint Settings")]
     [SerializeField] private int maxTilesToPaint = 2;
@@ -128,15 +128,12 @@ public class PaintBullet : MonoBehaviour
         if (isDespawning) return;
         if (collision.collider == parentCollider) return;
 
-        // --- NEW KNOCKBACK LOGIC ---
         Rigidbody2D hitRb = collision.gameObject.GetComponent<Rigidbody2D>();
         if (hitRb != null)
         {
-            // Calculate direction from bullet to target (or just use velocity direction)
             Vector2 knockbackDir = rb.linearVelocity.normalized;
             hitRb.AddForce(knockbackDir * knockbackForce, ForceMode2D.Impulse);
         }
-        // ---------------------------
 
         if (collision.gameObject.CompareTag("Enemy"))
         {

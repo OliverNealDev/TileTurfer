@@ -1,3 +1,10 @@
+/*
+ * Script Name: MapGenerator.cs
+ * Author: Oliver Neal (F5246890)
+ * * AI Declaration:
+ * Portions of this script were used in assistance with generative AI tools.
+ */
+
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using System.Collections.Generic;
